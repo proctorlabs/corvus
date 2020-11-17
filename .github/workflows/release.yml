@@ -1,0 +1,66 @@
+name: Release Artifacts
+on:
+  push:
+    tags: ['v**']
+
+jobs:
+  build:
+    name: Build Artifacts
+
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            build-options: []
+          - target: aarch64-unknown-linux-gnu
+            build-options: [cross]
+          - target: armv7-unknown-linux-gnueabihf
+            build-options: [cross]
+
+    runs-on: 'ubuntu-latest'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Use stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: '${{ matrix.target }}'
+          override: true
+          default: true
+
+      - name: 'Build binary for ${{ matrix.target }}'
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ contains(matrix.build-options, 'cross') }}
+          command: build
+          args: '--target ${{ matrix.target }} --release'
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: ''
+          draft: false
+          prerelease: false
+
+      - name: Package tarball
+        run: >-
+          tar -cJf 'corvus-${{ matrix.target }}.tar.xz' -C target/${{ matrix.target }}/release corvus
+
+      - name: Upload Release Assets
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./templar-${{ matrix.target }}.tar.xz
+          asset_name: templar-${{ matrix.target }}.tar.xz
+          asset_content_type: application/x-gtar
