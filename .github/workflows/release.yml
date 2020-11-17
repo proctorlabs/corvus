@@ -4,9 +4,30 @@ on:
     tags: ['v**']
 
 jobs:
-  build:
-    name: Build Artifacts
+  create_release:
+    name: Create Github Release
+    runs-on: 'ubuntu-latest'
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: ''
+          draft: false
+          prerelease: false
+
+  build_release:
+    name: Build Release Artifacts
+    needs: ['create_release']
     strategy:
       matrix:
         include:
@@ -38,18 +59,6 @@ jobs:
           command: build
           args: '--target ${{ matrix.target }} --release'
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body: ''
-          draft: false
-          prerelease: false
-
       - name: Package tarball
         run: >-
           tar -cJf 'corvus-${{ matrix.target }}.tar.xz' -C target/${{ matrix.target }}/release corvus
@@ -60,7 +69,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ./corvus-${{ matrix.target }}.tar.xz
           asset_name: corvus-${{ matrix.target }}.tar.xz
           asset_content_type: application/x-gtar
