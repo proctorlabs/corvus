@@ -33,6 +33,8 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             build-options: [cross]
+          - target: i586-unknown-linux-musl
+            build-options: [cross]
           - target: i686-unknown-linux-musl
             build-options: [cross]
           - target: aarch64-unknown-linux-musl
