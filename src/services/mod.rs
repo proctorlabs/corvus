@@ -1,9 +1,7 @@
-use {
-    crate::{config::ServiceTypeConfiguration, prelude::*, triggers::Triggers},
-    bluetooth::BluetoothService,
-    command::CommandService,
-    async_trait::async_trait,
-};
+use crate::{config::ServiceTypeConfiguration, prelude::*, triggers::Triggers};
+use async_trait::async_trait;
+use bluetooth::BluetoothService;
+use command::CommandService;
 
 mod bluetooth;
 mod command;
@@ -17,12 +15,12 @@ pub trait Service {
 #[derive(Debug, Clone)]
 pub enum Services {
     Command {
-        name: String,
+        name:    String,
         trigger: Triggers,
         service: CommandService,
     },
     Bluetooth {
-        name: String,
+        name:    String,
         trigger: Triggers,
         service: BluetoothService,
     },
@@ -57,7 +55,7 @@ impl Services {
         }
     }
 
-    pub fn start(&self) -> Result<()>{
+    pub fn start(&self) -> Result<()> {
         let svc = self.clone();
         match self {
             Services::Command { trigger, .. } => trigger.init(svc),

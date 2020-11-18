@@ -11,20 +11,20 @@ mod hass;
 
 #[derive(Clone)]
 pub struct MQTTService {
-    location: String,
-    config: Arc<MQTTConfiguration>,
+    location:  String,
+    config:    Arc<MQTTConfiguration>,
     eventloop: SharedMutex<EventLoop>,
-    client: AsyncClient,
-    cluster: ClusterState,
+    client:    AsyncClient,
+    cluster:   ClusterState,
 }
 
 impl std::fmt::Debug for MQTTService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MQTTService")
-         .field("location", &self.location)
-         .field("config", &self.config)
-         .field("cluster", &self.cluster)
-         .finish()
+            .field("location", &self.location)
+            .field("config", &self.config)
+            .field("cluster", &self.cluster)
+            .finish()
     }
 }
 
@@ -46,7 +46,7 @@ impl MQTTService {
 
     async fn handle_message(&self, p: rumqttc::Publish) -> Result<()> {
         let payload = String::from_utf8(p.payload.to_vec()).unwrap_or_default();
-        debug!("Payload received: '{}' => Topic: {}", payload, p.topic);
+        trace!("Payload received: '{}' => Topic: {}", payload, p.topic);
         match p.topic {
             t if t == format!("{}/cluster/leader", self.config.base_topic) => {
                 self.cluster.set_leader(payload).await;
@@ -97,13 +97,13 @@ impl MQTTService {
 
     async fn poll_leader(&self) -> Result<()> {
         if self.cluster.is_leader().await {
-            debug!("Rebroadcasting leadership...");
+            trace!("Rebroadcasting leadership...");
             self.declare_leadership().await
         } else if self.cluster.leader_needed().await? {
             debug!("Cluster needs a leader, attempting to assume leadership...");
             self.declare_leadership().await
         } else {
-            debug!(
+            trace!(
                 "Current cluster leader is '{}'",
                 self.cluster
                     .get_leader()
@@ -152,7 +152,10 @@ impl MQTTService {
         discovery.name = Some(name.to_string());
         discovery.device = Some(device_info);
         discovery.unique_id = Some(format!("{} {}", self.location, name));
-        discovery.base_topic = Some(format!("{}/nodes/{}/", self.config.base_topic, self.location));
+        discovery.base_topic = Some(format!(
+            "{}/nodes/{}/",
+            self.config.base_topic, self.location
+        ));
 
         discovery.state_topic = Some(format!("~/{}", name));
         discovery.json_attributes_topic = Some(format!("~/{}", name));
@@ -168,7 +171,10 @@ impl MQTTService {
     }
 
     pub async fn send(&self, topic: String, payload: Document) -> Result<()> {
-        let t = format!("{}/nodes/{}/{}", self.config.base_topic, self.location, topic);
+        let t = format!(
+            "{}/nodes/{}/{}",
+            self.config.base_topic, self.location, topic
+        );
         trace!("MQTT send on topic {}", t);
         self.client
             .publish(t, QoS::AtLeastOnce, false, serde_json::to_string(&payload)?)

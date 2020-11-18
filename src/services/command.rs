@@ -1,11 +1,9 @@
-use {
-    super::*,
-    crate::mqtt::{DeviceType, HassDiscoveryPayload},
-    serde::{Deserialize, Serialize},
-    std::process::Stdio,
-    tokio::process::Command,
-    unstructured::Document,
-};
+use super::*;
+use crate::mqtt::{DeviceType, HassDiscoveryPayload};
+use serde::{Deserialize, Serialize};
+use std::process::Stdio;
+use tokio::process::Command;
+use unstructured::Document;
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
@@ -17,9 +15,9 @@ struct CommandPayload {
 
 #[derive(Clone, Debug)]
 pub struct CommandService {
-    pub app: App,
+    pub app:     App,
     pub command: String,
-    pub args: Vec<String>,
+    pub args:    Vec<String>,
 }
 
 #[async_trait]

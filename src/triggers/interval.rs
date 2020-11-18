@@ -13,7 +13,11 @@ impl IntervalTrigger {
 
 impl Trigger for IntervalTrigger {
     fn init(&self, service: Services) -> Result<()> {
-        info!("Starting service '{}' with interval trigger every {} seconds.", service.name(), self.interval);
+        info!(
+            "Starting service '{}' with interval trigger every {} seconds.",
+            service.name(),
+            self.interval
+        );
         let interval = self.interval;
         service_interval!((interval) : {
             service.run().await?;

@@ -1,8 +1,6 @@
-use {
-    crate::{config::TriggerConfiguration, services::Services, *},
-    interval::IntervalTrigger,
-    on_start::OnStartTrigger,
-};
+use crate::{config::TriggerConfiguration, services::Services, *};
+use interval::IntervalTrigger;
+use on_start::OnStartTrigger;
 
 mod interval;
 mod on_start;
@@ -13,29 +11,27 @@ pub trait Trigger {
 
 #[derive(Debug, Clone)]
 pub enum Triggers {
-    Interval { trigger: IntervalTrigger },
-    OnStart { trigger: OnStartTrigger },
-    MQTT { trigger: IntervalTrigger },
+    Interval(IntervalTrigger),
+    OnStart(OnStartTrigger),
+    MQTT(IntervalTrigger),
 }
 
 impl Triggers {
     pub fn new(cfg: Arc<TriggerConfiguration>) -> Self {
         match &*cfg {
-            TriggerConfiguration::Interval { interval } => Triggers::Interval {
-                trigger: IntervalTrigger::new(*interval),
-            },
+            TriggerConfiguration::Interval { interval } => {
+                Triggers::Interval(IntervalTrigger::new(*interval))
+            }
             TriggerConfiguration::MQTT { .. } => unimplemented!(),
-            TriggerConfiguration::Start { .. } => Triggers::OnStart {
-                trigger: OnStartTrigger::new(),
-            },
+            TriggerConfiguration::Start { .. } => Triggers::OnStart(OnStartTrigger::new()),
         }
     }
 
     pub fn init(&self, service: Services) -> Result<()> {
         match self {
-            Triggers::Interval { trigger } => trigger.init(service),
-            Triggers::MQTT { trigger } => trigger.init(service),
-            Triggers::OnStart { trigger } => trigger.init(service),
+            Triggers::Interval(trigger) => trigger.init(service),
+            Triggers::MQTT(trigger) => trigger.init(service),
+            Triggers::OnStart(trigger) => trigger.init(service),
         }
     }
 }

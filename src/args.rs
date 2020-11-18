@@ -1,7 +1,6 @@
 use super::*;
 use std::path::PathBuf;
-use structopt::clap::AppSettings::*;
-use structopt::StructOpt;
+use structopt::{clap::AppSettings::*, StructOpt};
 
 pub fn parse() -> Result<Options> {
     Ok(Options::from_args())
@@ -20,7 +19,11 @@ pub struct Options {
     #[structopt(short = "c", long, parse(from_os_str), default_value = "corvus.toml")]
     pub config: PathBuf,
 
+    /// Generate configuration with default values
+    #[structopt(short, long)]
+    pub generate: bool,
+
     /// Verbosity level of output
     #[structopt(short = "v", long, parse(from_occurrences))]
-    pub verbosity: u64
+    pub verbosity: u64,
 }

@@ -1,7 +1,8 @@
 use super::*;
-use bluez::client::*;
-use bluez::interface::controller::*;
-use bluez::interface::event::Event;
+use bluez::{
+    client::*,
+    interface::{controller::*, event::Event},
+};
 use tokio::time::{interval, Duration};
 
 #[derive(Clone, Debug)]
@@ -17,7 +18,7 @@ impl Service for BluetoothService {
 
     async fn run(&self, _name: String) -> Result<()> {
         debug!("Initialize bluetooth services");
-        let mut client = BlueZClient::new().unwrap();
+        let mut client = BlueZClient::new()?;
 
         let controllers = client.get_controller_list().await?;
         let mut controller = None;

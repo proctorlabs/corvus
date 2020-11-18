@@ -1,0 +1,13 @@
+unstable_features = true
+reorder_imports = true
+merge_imports = true
+use_field_init_shorthand = true
+use_try_shorthand = true
+condense_wildcard_suffixes = true
+# fn_single_line = true
+format_macro_matchers = true
+edition = "2018"
+
+struct_field_align_threshold = 40
+enum_discrim_align_threshold = 40
+# group_imports = "StdExternalCrate"

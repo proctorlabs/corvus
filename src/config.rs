@@ -1,15 +1,27 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
-use std::io::Read;
-use std::path::PathBuf;
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+};
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Configuration {
-    pub node: Arc<NodeConfiguration>,
-    pub mqtt: Arc<MQTTConfiguration>,
-    #[serde(alias = "service")]
+    pub node:     Arc<NodeConfiguration>,
+    pub mqtt:     Arc<MQTTConfiguration>,
+    #[serde(rename = "service")]
     pub services: Vec<Arc<ServiceConfiguration>>,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Configuration {
+            services: vec![Default::default()],
+            node:     Default::default(),
+            mqtt:     Default::default(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -29,20 +41,20 @@ impl Default for NodeConfiguration {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", default)]
 pub struct MQTTConfiguration {
-    pub client_id: String,
-    pub host: String,
-    pub port: u16,
-    pub base_topic: String,
+    pub client_id:       String,
+    pub host:            String,
+    pub port:            u16,
+    pub base_topic:      String,
     pub discovery_topic: String,
 }
 
 impl Default for MQTTConfiguration {
     fn default() -> Self {
         MQTTConfiguration {
-            client_id: "corvus".into(),
-            host: "localhost".into(),
-            port: 1883,
-            base_topic: "corvus".into(),
+            client_id:       "corvus".into(),
+            host:            "localhost".into(),
+            port:            1883,
+            base_topic:      "corvus".into(),
             discovery_topic: "homeassistant".into(),
         }
     }
@@ -51,7 +63,8 @@ impl Default for MQTTConfiguration {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", default)]
 pub struct ServiceConfiguration {
-    pub name: String,
+    pub name:    String,
+    #[serde(rename = "definition")]
     pub service: Arc<ServiceTypeConfiguration>,
     pub trigger: Arc<TriggerConfiguration>,
 }
@@ -59,7 +72,7 @@ pub struct ServiceConfiguration {
 impl Default for ServiceConfiguration {
     fn default() -> Self {
         ServiceConfiguration {
-            name: Default::default(),
+            name:    Default::default(),
             trigger: Default::default(),
             service: Default::default(),
         }
@@ -71,17 +84,14 @@ impl Default for ServiceConfiguration {
 pub enum ServiceTypeConfiguration {
     Command {
         command: String,
-        args: Vec<String>,
+        args:    Vec<String>,
     },
     Bluetooth {},
 }
 
 impl Default for ServiceTypeConfiguration {
     fn default() -> Self {
-        ServiceTypeConfiguration::Command {
-            command: Default::default(),
-            args: Default::default(),
-        }
+        ServiceTypeConfiguration::Bluetooth {}
     }
 }
 
@@ -113,5 +123,19 @@ impl Configuration {
         let c = toml::from_str(&contents)
             .with_context(|| format!("Failed to parse contents of {}!", path))?;
         Ok(Arc::new(c))
+    }
+
+    pub fn generate_default(file: PathBuf) -> Result<()> {
+        let path = file
+            .clone()
+            .into_os_string()
+            .into_string()
+            .unwrap_or_default();
+        let config = Self::default();
+        let content = toml::to_vec(&config)?;
+        let mut f = std::fs::File::create(file)
+            .with_context(|| format!("Could not create file {}!", path))?;
+        f.write_all(&content)?;
+        Ok(())
     }
 }

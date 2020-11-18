@@ -30,17 +30,14 @@ macro_rules! spawn {
             loop {
                 throttle.next().await;
                 #[allow(unused_variables)]
-                let r = {
+                let r = async {
                     $( $content )*
                     #[allow(unreachable_code)]
                     Ok::<(), anyhow::Error>(())
-                };
+                }.await;
                 match r {
-                    Ok(_) => {
-                        info!("Task finished...");
-                        break;
-                    }
-                    Err(e) => error!("Task failure! {:?}", e),
+                    Ok(_) => warn!("Task prematurely finished!"),
+                    Err(e) => error!("Task failed: {:?}", e),
                 }
             }
             #[allow(unreachable_code)]

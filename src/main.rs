@@ -30,8 +30,8 @@ pub struct App(Arc<AppServices>);
 
 #[derive(Debug)]
 pub struct AppServices {
-    pub config: Arc<Configuration>,
-    pub mqtt: MQTTService,
+    pub config:   Arc<Configuration>,
+    pub mqtt:     MQTTService,
     pub services: Mutex<Vec<services::Services>>,
 }
 
@@ -53,14 +53,23 @@ impl App {
                 .build(),
             simplelog::TerminalMode::Mixed,
         )?;
-        info!("Starting Corvus {}", opts.verbosity);
-        let config = Configuration::load(opts.config)?;
-        let mqtt_service = MQTTService::new(config.node.location.clone(), config.mqtt.clone());
-        Ok(App(Arc::new(AppServices {
-            config,
-            services: Mutex::new(vec![]),
-            mqtt: mqtt_service,
-        })))
+        if opts.generate {
+            info!(
+                "Generating new configuration file at {}",
+                opts.config.to_string_lossy()
+            );
+            Configuration::generate_default(opts.config)?;
+            std::process::exit(0);
+        } else {
+            info!("Starting Corvus");
+            let config = Configuration::load(opts.config)?;
+            let mqtt_service = MQTTService::new(config.node.location.clone(), config.mqtt.clone());
+            Ok(App(Arc::new(AppServices {
+                config,
+                services: Mutex::new(vec![]),
+                mqtt: mqtt_service,
+            })))
+        }
     }
 
     pub async fn start(&mut self) -> Result<()> {

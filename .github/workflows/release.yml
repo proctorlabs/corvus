@@ -31,11 +31,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          - target: i586-unknown-linux-musl
             build-options: []
-          - target: aarch64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            build-options: []
+          - target: aarch64-unknown-linux-musl
             build-options: [cross]
-          - target: armv7-unknown-linux-gnueabihf
+          - target: armv7-unknown-linux-musleabihf
             build-options: [cross]
 
     runs-on: 'ubuntu-latest'

@@ -6,7 +6,7 @@ pub struct ClusterState(SharedRwLock<ClusterStateData>);
 
 #[derive(Debug)]
 pub struct ClusterStateData {
-    node_name: String,
+    node_name:      String,
     current_leader: Option<String>,
     last_timestamp: SystemTime,
 }
