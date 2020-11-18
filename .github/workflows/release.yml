@@ -13,6 +13,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install musl-dev musl-tools
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
