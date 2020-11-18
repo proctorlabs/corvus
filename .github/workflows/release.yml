@@ -31,10 +31,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: i586-unknown-linux-musl
-            build-options: []
           - target: x86_64-unknown-linux-musl
-            build-options: []
+            build-options: [cross]
+          - target: i686-unknown-linux-musl
+            build-options: [cross]
           - target: aarch64-unknown-linux-musl
             build-options: [cross]
           - target: armv7-unknown-linux-musleabihf
@@ -45,9 +45,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - name: Install musl tools
-        run: sudo apt-get update && sudo apt-get install musl-dev musl-tools
 
       - name: Use stable toolchain
         uses: actions-rs/toolchain@v1
