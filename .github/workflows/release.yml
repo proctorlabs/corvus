@@ -86,7 +86,7 @@ jobs:
   docker_images:
     name: Create docker images
     needs: ['build_release']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v2
@@ -110,5 +110,5 @@ jobs:
           docker buildx build \
             --platform linux/arm64,linux/amd64,linux/386 \
             -f docker/Dockerfile \
-            -t "ghcr.io/proctorlabs/corvus:${{ github.ref }}" \
+            -t "ghcr.io/proctorlabs/corvus:${GITHUB_REF##*/}" \
             --push docker/
