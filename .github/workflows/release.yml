@@ -77,3 +77,33 @@ jobs:
           asset_path: ./corvus-${{ matrix.target }}.tar.xz
           asset_name: corvus-${{ matrix.target }}.tar.xz
           asset_content_type: application/x-gtar
+
+  docker_images:
+    name: Create docker images
+    needs: ['build_release']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: crazy-max/ghaction-docker-buildx@v3
+        with:
+          buildx-version: latest
+          qemu-version: latest
+
+      - name: Docker Login
+        env:
+          DOCKER_USERNAME: ${{ github.actor }}
+          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+
+      - name: Run Crossbuild
+        run: |-
+          docker buildx build \
+            --platform linux/arm64,linux/amd64,linux/386 \
+            -f docker/Dockerfile \
+            -t "docker.pkg.github.com/proctorlabs/corvus/corvus:${{ github.ref }}" \
+            --push docker/

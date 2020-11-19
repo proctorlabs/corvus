@@ -1,0 +1,11 @@
+[node]
+location = "home"
+
+[mqtt]
+client_id = "corvus-mqtt"
+
+[[service]]
+name = "bluetooth"
+
+[service.definition]
+type = "bluetooth"

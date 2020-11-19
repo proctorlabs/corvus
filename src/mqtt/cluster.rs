@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::time::SystemTime;
 
 #[derive(Deref, Debug, Clone)]
@@ -7,6 +8,7 @@ pub struct ClusterState(SharedRwLock<ClusterStateData>);
 #[derive(Debug)]
 pub struct ClusterStateData {
     node_name:      String,
+    sid:            String,
     current_leader: Option<String>,
     last_timestamp: SystemTime,
 }
@@ -17,18 +19,19 @@ impl ClusterState {
             node_name,
             current_leader: None,
             last_timestamp: SystemTime::now(),
+            sid: thread_rng().sample_iter(&Alphanumeric).take(30).collect(),
         })))
     }
 
     pub async fn is_leader(&self) -> bool {
         let s = self.read().await;
-        matches!(&s.current_leader, Some(cl) if cl == &s.node_name)
+        matches!(&s.current_leader, Some(cl) if cl == &s.sid)
     }
 
     pub async fn set_leader(&self, leader: String) {
         let mut s = self.write().await;
         if !matches!(&s.current_leader, Some(cl) if cl == &leader) {
-            debug!("Cluster leader changing to '{}'", leader);
+            debug!("Current cluster leader is '{}'", leader);
             (*s).current_leader = Some(leader);
         }
         (*s).last_timestamp = SystemTime::now();
@@ -42,5 +45,10 @@ impl ClusterState {
     pub async fn get_leader(&self) -> Result<Option<String>> {
         let s = self.read().await;
         Ok(s.current_leader.clone())
+    }
+
+    pub async fn get_sid(&self) -> Result<String> {
+        let s = self.read().await;
+        Ok(s.sid.clone())
     }
 }

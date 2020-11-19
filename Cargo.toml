@@ -19,6 +19,7 @@ derive_more = "0.99"
 clap = "2.33"
 structopt = "0.3"
 async-trait = "0.1"
+rand = "0.7"
 
 log = "0.4"
 simplelog = "0.8"

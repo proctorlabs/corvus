@@ -120,7 +120,7 @@ impl MQTTService {
                 format!("{}/cluster/leader", self.config.base_topic),
                 QoS::AtLeastOnce,
                 true,
-                self.location.to_string(),
+                self.cluster.get_sid().await?,
             )
             .await?;
         Ok(())
