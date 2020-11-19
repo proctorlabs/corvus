@@ -33,7 +33,7 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             build-options: [cross]
-            file-tag: "amd64"
+            file-tag: "x86_64"
           - target: i586-unknown-linux-musl
             build-options: [cross]
             file-tag: "i586"
@@ -42,10 +42,10 @@ jobs:
             file-tag: "i686"
           - target: aarch64-unknown-linux-musl
             build-options: [cross]
-            file-tag: "arm64"
+            file-tag: "aarch64"
           - target: armv7-unknown-linux-musleabihf
             build-options: [cross]
-            file-tag: "armv7"
+            file-tag: "armv7l"
 
     runs-on: 'ubuntu-latest'
 
@@ -70,7 +70,7 @@ jobs:
 
       - name: Package tarball
         run: >-
-          tar -cJf 'corvus-${{ matrix.target }}.tar.xz' -C target/${{ matrix.target }}/release corvus
+          tar -cJf 'corvus.${{ matrix.file-tag }}.tar.xz' -C target/${{ matrix.target }}/release corvus
 
       - name: Upload Release Assets
         id: upload-release-asset
@@ -79,8 +79,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ./corvus-${{ matrix.target }}.tar.xz
-          asset_name: corvus-${{ matrix.target }}.tar.xz
+          asset_path: ./corvus.${{ matrix.file-tag }}.tar.xz
+          asset_name: corvus.${{ matrix.file-tag }}.tar.xz
           asset_content_type: application/x-gtar
 
   docker_images:
