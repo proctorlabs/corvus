@@ -100,8 +100,8 @@ jobs:
 
       - name: Docker Login
         env:
-          DOCKER_USERNAME: ${{ github.actor }}
-          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_USERNAME: ${{ secrets.GHCR_USER }}
+          DOCKER_PASSWORD: ${{ secrets.GHCR_TOKEN }}
         run: |-
           docker login ghcr.io -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
 
@@ -110,5 +110,5 @@ jobs:
           docker buildx build \
             --platform linux/arm64,linux/amd64,linux/386 \
             -f docker/Dockerfile \
-            -t "docker.pkg.github.com/proctorlabs/corvus/corvus:${{ github.ref }}" \
+            -t "ghcr.io/proctorlabs/corvus:${{ github.ref }}" \
             --push docker/
