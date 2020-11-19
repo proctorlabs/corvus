@@ -1,6 +1,5 @@
-# platforms := "linux/arm64,linux/amd64,linux/386,linux/arm/v7,linux/arm/v6"
-platforms := "linux/arm64,linux/amd64,linux/386"
-docker_binary := "0.1.0-alpha7"
+platforms := "linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64"
+docker_binary := "v0.1.0-alpha14"
 
 fmt:
     #!/usr/bin/env bash
