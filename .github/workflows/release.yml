@@ -50,11 +50,11 @@ jobs:
           - target: armv7-unknown-linux-musleabihf
             build-options: [cross]
             file-tag: "armv7l"
-            strip: "armv7-linux-musl-strip"
+            strip: "arm-linux-musleabihf-strip"
           - target: arm-unknown-linux-musleabihf
             build-options: [cross]
             file-tag: "armv6"
-            strip: "arm-linux-musl-strip"
+            strip: "arm-linux-musleabihf-strip"
 
     runs-on: 'ubuntu-latest'
 
