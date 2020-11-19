@@ -111,4 +111,5 @@ jobs:
             --platform linux/arm64,linux/amd64,linux/386 \
             -f docker/Dockerfile \
             -t "ghcr.io/proctorlabs/corvus:${GITHUB_REF##*/}" \
+            --build-arg CORVUS_VERSION="${GITHUB_REF##*/}" \
             --push docker/
