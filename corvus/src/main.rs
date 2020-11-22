@@ -23,6 +23,7 @@ pub use prelude::*;
 
 #[tokio::main(core_threads = 6)]
 async fn main() -> Result<()> {
+    cblue::do_thing();
     App::new().await?.start().await
 }
 

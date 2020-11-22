@@ -1,2 +1,10 @@
 [workspace]
-members = ["corvus"]
+members = ["cblue", "corvus"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+
+# Reduce build time by setting proc-macro crates non optimized.
+[profile.release.build-override]
+opt-level = 0

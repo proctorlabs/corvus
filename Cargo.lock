@@ -225,7 +225,7 @@ checksum = "25e9a5dd23fb9ec2e01afc351246f8e2d6e3b35b72d282b9777696e214090b12"
 dependencies = [
  "async-std",
  "bitvec",
- "bytes",
+ "bytes 0.5.6",
  "enumflags2",
  "enumflags2_derive",
  "futures",
@@ -260,10 +260,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "bytes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
+
+[[package]]
 name = "cache-padded"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "631ae5198c9be5e753e5cc215e1bd73c2b466a3565173db433f52bb9d3e66dba"
+
+[[package]]
+name = "cblue"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "bytes 0.6.0",
+ "futures",
+ "libc",
+ "log",
+ "thiserror",
+]
 
 [[package]]
 name = "cc"
@@ -333,6 +351,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bluez",
+ "cblue",
  "chrono",
  "clap",
  "derive_more",
@@ -767,7 +786,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f7f17b72c9751480f96330a72e4b93dc8289c98d37c22877526e3a8a39b5675"
 dependencies = [
- "bytes",
+ "bytes 0.5.6",
 ]
 
 [[package]]
@@ -1087,7 +1106,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aeea29d94ec1bc9ec33ba8ce756c256b6fb4c7c5dc96fdf01a956ccc23d7d5e9"
 dependencies = [
  "async-channel",
- "bytes",
+ "bytes 0.5.6",
  "log",
  "mqtt4bytes",
  "pollster",
@@ -1309,7 +1328,7 @@ version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6d7ad61edd59bfcc7e80dababf0f4aed2e6d5e0ba1659356ae889752dfc12ff"
 dependencies = [
- "bytes",
+ "bytes 0.5.6",
  "fnv",
  "futures-core",
  "iovec",

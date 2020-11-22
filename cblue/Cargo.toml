@@ -1,0 +1,20 @@
+[package]
+name = "cblue"
+description = "Corvus Bluetooth Agent <Currently Experimental>"
+version = "0.1.0"
+authors = ["Phil Proctor <philliptproctor@gmail.com>"]
+edition = "2018"
+documentation = "https://docs.rs/cblue"
+repository = "https://github.com/proctorlabs/corvus"
+license = "MIT/Apache-2.0"
+readme = "README.md"
+exclude = [".github/**", "docs/**"]
+workspace = "../"
+
+[dependencies]
+log = "0.4"
+libc = "0.2"
+futures = "0.3"
+bytes = "0.6"
+async-std = { version = "1.7", features = ["attributes"] }
+thiserror = "1.0"
