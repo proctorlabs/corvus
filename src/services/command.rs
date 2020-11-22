@@ -1,5 +1,4 @@
 use super::*;
-use crate::mqtt::{DeviceType, HassDiscoveryPayload};
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tokio::process::Command;
@@ -20,10 +19,22 @@ pub struct CommandService {
     pub args:    Vec<String>,
 }
 
+impl CommandService {
+    pub fn new(app: App, command: String, args: Vec<String>) -> Self {
+        CommandService { app, command, args }
+    }
+}
+
 #[async_trait]
 impl Service for CommandService {
-    fn device_type(&self) -> &'static str {
-        "sensor"
+    async fn heartbeat(&self, name: String) -> Result<()> {
+        self.app
+            .mqtt
+            .add_device(DeviceInfo {
+                name,
+                typ: DeviceType::Sensor,
+            })
+            .await
     }
 
     async fn run(&self, name: String) -> Result<()> {
@@ -36,27 +47,20 @@ impl Service for CommandService {
             .await?;
         let stdout = String::from_utf8(output.stdout).unwrap_or_default();
         let stderr = String::from_utf8(output.stderr).unwrap_or_default();
-
-        self.app
-            .mqtt
-            .send(
-                name.clone(),
+        let update = DeviceUpdate {
+            name,
+            value: stdout.trim().into(),
+            attr: Some(
                 CommandPayload {
                     status: output.status.code().unwrap_or_default(),
                     stdout: stdout.trim().into(),
                     stderr: stderr.trim().into(),
                 }
                 .into(),
-            )
-            .await?;
+            ),
+        };
 
-        let cfg = self.clone();
-        let (name, app) = (name, cfg.app);
-        service_interval!((30): {
-            let devinfo = HassDiscoveryPayload::default();
-            app.mqtt.add_device(DeviceType::Sensor, name.clone(), devinfo).await?;
-        });
-        Ok(())
+        self.app.mqtt.update_device(&update).await
     }
 }
 

@@ -1,13 +1,9 @@
-use crate::{prelude::*, service_interval, MQTTConfiguration, Result};
+use crate::{prelude::*, MQTTConfiguration, Result};
 use cluster::ClusterState;
-pub use devices::DeviceType;
-pub use hass::{HassDeviceInformation, HassDiscoveryPayload};
-use rumqttc::{self, AsyncClient, Event, EventLoop, Incoming, MqttOptions, QoS};
+use rumqttc::{self, AsyncClient, Event, EventLoop, Incoming, LastWill, MqttOptions, QoS};
 use std::sync::Arc;
 
 mod cluster;
-mod devices;
-mod hass;
 
 #[derive(Clone)]
 pub struct MQTTService {
@@ -29,19 +25,24 @@ impl std::fmt::Debug for MQTTService {
 }
 
 impl MQTTService {
-    pub fn new(location: String, config: Arc<MQTTConfiguration>) -> Self {
+    pub async fn new(location: String, config: Arc<MQTTConfiguration>) -> Result<Self> {
         let mut mqttoptions =
             MqttOptions::new(config.client_id.clone(), config.host.clone(), config.port);
         mqttoptions.set_keep_alive(5);
-
+        let avty_t = format!("{}/nodes/{}/avty", config.base_topic, location);
+        mqttoptions.set_last_will(LastWill::new(&avty_t, QoS::AtLeastOnce, "offline"));
         let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
-        MQTTService {
+        client
+            .publish(avty_t, QoS::AtLeastOnce, true, "online")
+            .await?;
+
+        Ok(MQTTService {
             location: location.clone(),
             config,
             client,
             eventloop: Arc::new(Mutex::new(eventloop)),
             cluster: ClusterState::new(location),
-        }
+        })
     }
 
     async fn handle_message(&self, p: rumqttc::Publish) -> Result<()> {
@@ -51,25 +52,30 @@ impl MQTTService {
             t if t == format!("{}/cluster/leader", self.config.base_topic) => {
                 self.cluster.set_leader(payload).await;
             }
-            _ => warn!("Unknown topic"),
+            _ => trace!("Unknown topic"),
         }
         Ok(())
     }
 
     pub fn start(&self) -> Result<()> {
-        let zelf = self.clone();
+        let mqtt = self.clone();
         spawn! {
-            zelf.client
+            // New connection setup
+            mqtt.client
                 .subscribe(
-                    format!("{}/cluster/leader", zelf.config.base_topic),
+                    format!("{}/cluster/leader", mqtt.config.base_topic),
                     QoS::AtLeastOnce,
                 )
                 .await?;
+
+            // mqtt.client.publish();
+
+            // Main loop
             let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
             loop {
-                match zelf.eventloop.lock().await.poll().await {
+                match mqtt.eventloop.lock().await.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
-                        zelf.handle_message(p)
+                        mqtt.handle_message(p)
                             .await
                             .unwrap_or_else(|e| warn!("Error polling event: {:?}", e));
                     }
@@ -81,18 +87,11 @@ impl MQTTService {
                 }
             }
         };
-
-        let zelf = self.clone();
-        service_interval!((10):{
-            zelf.heartbeat().await?;
-        });
-
         Ok(())
     }
 
-    async fn heartbeat(&self) -> Result<()> {
-        self.poll_leader().await?;
-        Ok(())
+    pub async fn heartbeat(&self) -> Result<()> {
+        self.poll_leader().await
     }
 
     async fn poll_leader(&self) -> Result<()> {
@@ -126,39 +125,48 @@ impl MQTTService {
         Ok(())
     }
 
+    fn get_id(&self, name: &str) -> Result<String> {
+        Ok(format!("{}_{}", self.location, name)
+            .replace(":", "")
+            .replace("-", "_"))
+    }
+
     // {"payload_available":"online","payload_not_available":"offline","availability_topic":"xx","icon":"mdi:account-group"}
 
-    pub async fn add_device(
-        &self,
-        device_type: DeviceType,
-        name: String,
-        mut discovery: HassDiscoveryPayload,
-    ) -> Result<()> {
+    pub async fn add_device(&self, device: DeviceInfo) -> Result<()> {
+        let uniq_id = self.get_id(&device.name)?;
         let t = format!(
             "{}/{}/{}/{}/config",
             self.config.discovery_topic,
-            device_type,
+            device.typ,
             crate_name!(),
-            name
+            uniq_id
         );
 
         let mut device_info = HassDeviceInformation::default();
-        device_info.name = Some(name.to_string());
+        device_info.name = Some(self.location.to_string());
         device_info.model = Some(crate_name!().into());
         device_info.manufacturer = Some(crate_authors!().into());
         device_info.sw_version = Some(crate_version!().into());
-        device_info.identifiers = Some(name.to_string());
+        device_info.identifiers = Some(self.location.replace(":", "").replace("-", "_"));
 
-        discovery.name = Some(name.to_string());
+        let mut discovery = HassDiscoveryPayload::default();
+        discovery.name = Some(device.name.to_string());
         discovery.device = Some(device_info);
-        discovery.unique_id = Some(format!("{} {}", self.location, name));
+        discovery.unique_id = Some(uniq_id.to_string());
         discovery.base_topic = Some(format!(
-            "{}/nodes/{}/",
-            self.config.base_topic, self.location
+            "{}/nodes/{}/{}/",
+            self.config.base_topic, self.location, uniq_id
         ));
 
-        discovery.state_topic = Some(format!("~/{}", name));
-        discovery.json_attributes_topic = Some(format!("~/{}", name));
+        discovery.state_topic = Some("~stat".to_string());
+        discovery.json_attributes_topic = Some("~attr".to_string());
+        discovery.availability_topic = Some(format!(
+            "{}/nodes/{}/avty",
+            self.config.base_topic, self.location
+        ));
+        discovery.payload_available = Some("online".into());
+        discovery.payload_not_available = Some("offline".into());
         self.client
             .publish(
                 t,
@@ -170,15 +178,41 @@ impl MQTTService {
         Ok(())
     }
 
-    pub async fn send(&self, topic: String, payload: Document) -> Result<()> {
-        let t = format!(
-            "{}/nodes/{}/{}",
-            self.config.base_topic, self.location, topic
+    pub async fn update_device(&self, d: &DeviceUpdate) -> Result<()> {
+        let uniq_id = self.get_id(&d.name)?;
+        let stat_t = format!(
+            "{}/nodes/{}/{}/stat",
+            self.config.base_topic, self.location, uniq_id
         );
-        trace!("MQTT send on topic {}", t);
         self.client
-            .publish(t, QoS::AtLeastOnce, false, serde_json::to_string(&payload)?)
+            .publish(stat_t, QoS::AtLeastOnce, false, d.value.to_string())
             .await?;
+        if let Some(attr) = &d.attr {
+            let attr_t = format!(
+                "{}/nodes/{}/{}/attr",
+                self.config.base_topic, self.location, uniq_id
+            );
+            self.client
+                .publish(
+                    attr_t,
+                    QoS::AtLeastOnce,
+                    false,
+                    serde_json::to_string(attr)?,
+                )
+                .await?;
+        }
         Ok(())
     }
+
+    // pub async fn send(&self, topic: String, payload: Document) -> Result<()> {
+    //     let t = format!(
+    //         "{}/nodes/{}/{}",
+    //         self.config.base_topic, self.location, topic
+    //     );
+    //     trace!("MQTT send on topic {}", t);
+    //     self.client
+    //         .publish(t, QoS::AtLeastOnce, false, serde_json::to_string(&payload)?)
+    //         .await?;
+    //     Ok(())
+    // }
 }

@@ -9,7 +9,7 @@ mod command;
 #[async_trait]
 pub trait Service {
     async fn run(&self, name: String) -> Result<()>;
-    fn device_type(&self) -> &'static str;
+    async fn heartbeat(&self, name: String) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -34,17 +34,20 @@ impl Services {
             ServiceTypeConfiguration::Command { command, args } => Services::Command {
                 name,
                 trigger,
-                service: CommandService {
-                    app,
-                    command: command.to_string(),
-                    args: args.clone(),
-                },
+                service: CommandService::new(app, command.to_string(), args.clone()),
             },
             ServiceTypeConfiguration::Bluetooth { .. } => Services::Bluetooth {
                 name,
                 trigger,
-                service: BluetoothService { app },
+                service: BluetoothService::new(app),
             },
+        }
+    }
+
+    pub async fn heartbeat(&self) -> Result<()> {
+        match self {
+            Services::Command { service, name, .. } => service.heartbeat(name.to_string()).await,
+            Services::Bluetooth { service, name, .. } => service.heartbeat(name.to_string()).await,
         }
     }
 
@@ -60,13 +63,6 @@ impl Services {
         match self {
             Services::Command { trigger, .. } => trigger.init(svc),
             Services::Bluetooth { trigger, .. } => trigger.init(svc),
-        }
-    }
-
-    pub fn device_type(&self) -> &'static str {
-        match self {
-            Services::Command { service, .. } => service.device_type(),
-            Services::Bluetooth { service, .. } => service.device_type(),
         }
     }
 

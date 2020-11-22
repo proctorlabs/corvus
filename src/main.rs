@@ -12,6 +12,7 @@ pub(crate) mod macros;
 
 mod args;
 mod config;
+mod data_structures;
 mod mqtt;
 mod prelude;
 mod services;
@@ -22,7 +23,7 @@ pub use prelude::*;
 
 #[tokio::main(core_threads = 6)]
 async fn main() -> Result<()> {
-    App::new()?.start().await
+    App::new().await?.start().await
 }
 
 #[derive(Clone, Deref, Debug)]
@@ -36,7 +37,7 @@ pub struct AppServices {
 }
 
 impl App {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let opts = args::parse()?;
         simplelog::TermLogger::init(
             match opts.verbosity {
@@ -63,7 +64,8 @@ impl App {
         } else {
             info!("Starting Corvus");
             let config = Configuration::load(opts.config)?;
-            let mqtt_service = MQTTService::new(config.node.location.clone(), config.mqtt.clone());
+            let mqtt_service =
+                MQTTService::new(config.node.location.clone(), config.mqtt.clone()).await?;
             Ok(App(Arc::new(AppServices {
                 config,
                 services: Mutex::new(vec![]),
@@ -72,7 +74,17 @@ impl App {
         }
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    async fn heartbeat(&self) -> Result<()> {
+        trace!("Running MQTT heartbeat");
+        self.mqtt.heartbeat().await?;
+        for svc in &*self.services.lock().await {
+            trace!("Running service heartbeat: {:?}", svc.name());
+            svc.heartbeat().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn start(&self) -> Result<()> {
         self.mqtt.start()?;
         let mut svcs = self.services.lock().await;
         for svc in self.config.services.iter() {
@@ -80,6 +92,11 @@ impl App {
             s.start()?;
             svcs.insert(0, s);
         }
+        drop(svcs);
+        let zelf = self.clone();
+        service_interval!((10):{
+            zelf.heartbeat().await?;
+        });
         tokio::signal::ctrl_c().await?;
         warn!("Signal received, shutting down");
         Ok(())
