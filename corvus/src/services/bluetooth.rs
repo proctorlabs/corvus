@@ -38,8 +38,9 @@ impl Service for BluetoothService {
         let mut node_data: HashMap<String, (String, i8, Document)> = Default::default();
         let ents = data.get_dev_id_prefix(&name).await;
         for (node, dev_id, stat) in ents.into_iter() {
+            let latest_stat = stat.stat.get_latest().await.unwrap_or_default();
             let current = node_data.get(&dev_id);
-            let rssi = i8::from_str(&stat.stat).unwrap_or(i8::MIN);
+            let rssi = i8::from_str(&latest_stat).unwrap_or(i8::MIN);
             match current {
                 Some((_, old_rssi, _)) => {
                     if rssi > *old_rssi {

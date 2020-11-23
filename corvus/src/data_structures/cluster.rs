@@ -12,7 +12,7 @@ pub struct EntityDataContainer(SharedRwLock<EntityData>);
 
 #[derive(Debug, Clone, Default)]
 pub struct EntityData {
-    pub stat: String,
+    pub stat: RollingVec<String>,
     pub attr: Document,
 }
 
@@ -37,8 +37,8 @@ impl ClusterNodes {
     pub async fn update_stat(&self, node: &str, entity: &str, stat: String) {
         let e = get_or_insert!(self, node, NodeEntities);
         let dat = get_or_insert!(e, entity, EntityDataContainer);
-        let mut lck = dat.write().await;
-        lck.stat = stat;
+        let lck = dat.write().await;
+        lck.stat.add(stat).await;
     }
 
     pub async fn update_attr(&self, node: &str, entity: &str, attr: Document) {
