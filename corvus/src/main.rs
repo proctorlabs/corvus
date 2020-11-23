@@ -31,9 +31,10 @@ pub struct App(Arc<AppServices>);
 
 #[derive(Debug)]
 pub struct AppServices {
-    pub config:   Arc<Configuration>,
-    pub mqtt:     MQTTService,
-    pub services: Mutex<Vec<services::Services>>,
+    pub config:       Arc<Configuration>,
+    pub mqtt:         MQTTService,
+    pub services:     Mutex<Vec<services::Services>>,
+    pub cluster_data: ClusterNodes,
 }
 
 impl App {
@@ -64,12 +65,18 @@ impl App {
         } else {
             info!("Starting Corvus");
             let config = Configuration::load(opts.config)?;
-            let mqtt_service =
-                MQTTService::new(config.node.location.clone(), config.mqtt.clone()).await?;
+            let cluster_data = ClusterNodes::default();
+            let mqtt_service = MQTTService::new(
+                config.node.location.clone(),
+                config.mqtt.clone(),
+                cluster_data.clone(),
+            )
+            .await?;
             Ok(App(Arc::new(AppServices {
                 config,
                 services: Mutex::new(vec![]),
                 mqtt: mqtt_service,
+                cluster_data,
             })))
         }
     }
@@ -77,10 +84,15 @@ impl App {
     async fn heartbeat(&self) -> Result<()> {
         trace!("Running MQTT heartbeat");
         self.mqtt.heartbeat().await?;
+        let is_leader = self.mqtt.is_leader().await;
         for svc in &*self.services.lock().await {
             trace!("Running service heartbeat: {:?}", svc.name());
             svc.heartbeat().await?;
+            if is_leader {
+                svc.leader_heartbeat(self.cluster_data.clone()).await?;
+            }
         }
+        if self.mqtt.is_leader().await {}
         Ok(())
     }
 

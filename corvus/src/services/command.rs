@@ -27,12 +27,17 @@ impl CommandService {
 
 #[async_trait]
 impl Service for CommandService {
+    async fn leader_heartbeat(&self, _: String, _: ClusterNodes) -> Result<()> {
+        Ok(())
+    }
+
     async fn heartbeat(&self, name: String) -> Result<()> {
         self.app
             .mqtt
             .add_device(DeviceInfo {
                 name,
                 typ: DeviceType::Sensor,
+                is_cluster_device: false,
             })
             .await
     }
@@ -58,6 +63,7 @@ impl Service for CommandService {
                 }
                 .into(),
             ),
+            is_cluster_device: false,
         };
 
         self.app.mqtt.update_device(&update).await

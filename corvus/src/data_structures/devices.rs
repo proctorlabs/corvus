@@ -2,8 +2,9 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
-    pub name: String,
-    pub typ:  DeviceType,
+    pub name:              String,
+    pub typ:               DeviceType,
+    pub is_cluster_device: bool,
 }
 
 #[derive(Clone, Debug, Display)]
@@ -24,7 +25,8 @@ pub enum DeviceType {
 
 #[derive(Debug, Clone)]
 pub struct DeviceUpdate {
-    pub name:  String,
-    pub value: Document,
-    pub attr:  Option<Document>,
+    pub name:              String,
+    pub value:             Document,
+    pub attr:              Option<Document>,
+    pub is_cluster_device: bool,
 }

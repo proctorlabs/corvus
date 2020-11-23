@@ -10,6 +10,7 @@ mod command;
 pub trait Service {
     async fn run(&self, name: String) -> Result<()>;
     async fn heartbeat(&self, name: String) -> Result<()>;
+    async fn leader_heartbeat(&self, name: String, data: ClusterNodes) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +49,17 @@ impl Services {
         match self {
             Services::Command { service, name, .. } => service.heartbeat(name.to_string()).await,
             Services::Bluetooth { service, name, .. } => service.heartbeat(name.to_string()).await,
+        }
+    }
+
+    pub async fn leader_heartbeat(&self, data: ClusterNodes) -> Result<()> {
+        match self {
+            Services::Command { service, name, .. } => {
+                service.leader_heartbeat(name.to_string(), data).await
+            }
+            Services::Bluetooth { service, name, .. } => {
+                service.leader_heartbeat(name.to_string(), data).await
+            }
         }
     }
 

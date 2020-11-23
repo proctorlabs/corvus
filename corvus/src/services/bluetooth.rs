@@ -5,7 +5,7 @@ use bluez::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use tokio::time::{interval, Duration};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,6 +33,47 @@ impl BluetoothService {
 
 #[async_trait]
 impl Service for BluetoothService {
+    async fn leader_heartbeat(&self, name: String, data: ClusterNodes) -> Result<()> {
+        trace!("BluetoothService Leader Heartbeat");
+        let mut node_data: HashMap<String, (String, i8, Document)> = Default::default();
+        let ents = data.get_dev_id_prefix(&name).await;
+        for (node, dev_id, stat) in ents.into_iter() {
+            let current = node_data.get(&dev_id);
+            let rssi = i8::from_str(&stat.stat).unwrap_or(i8::MIN);
+            match current {
+                Some((_, old_rssi, _)) => {
+                    if rssi > *old_rssi {
+                        node_data.insert(dev_id, (node, rssi, stat.attr.clone()));
+                    }
+                }
+                None => {
+                    node_data.insert(dev_id, (node, rssi, stat.attr.clone()));
+                }
+            }
+        }
+        for (dev_id, (mut loc, rssi, attr)) in node_data.into_iter() {
+            if rssi == i8::MIN {
+                loc = "none".into();
+            }
+            self.app
+                .mqtt
+                .add_device(DeviceInfo {
+                    name:              format!("{}_location", dev_id),
+                    typ:               DeviceType::Sensor,
+                    is_cluster_device: true,
+                })
+                .await?;
+            let dev = DeviceUpdate {
+                name:              format!("{}_location", dev_id),
+                value:             loc.into(),
+                attr:              Some(attr),
+                is_cluster_device: true,
+            };
+            self.app.mqtt.update_device(&dev).await?;
+        }
+        Ok(())
+    }
+
     async fn heartbeat(&self, name: String) -> Result<()> {
         trace!("BluetoothService Heartbeat");
         let n = Utc::now();
@@ -41,17 +82,19 @@ impl Service for BluetoothService {
             self.app
                 .mqtt
                 .add_device(DeviceInfo {
-                    name: format!("{}_{}", name, mac),
-                    typ:  DeviceType::Sensor,
+                    name:              format!("{}_{}", name, mac),
+                    typ:               DeviceType::Sensor,
+                    is_cluster_device: false,
                 })
                 .await?;
             if n.signed_duration_since(reading.timestamp).num_seconds() > 60 {
                 let mut r = reading.clone();
                 r.rssi = i8::MIN;
                 let dev = DeviceUpdate {
-                    name:  format!("{}_{}", name, r.mac_address),
-                    value: r.rssi.into(),
-                    attr:  Some(Document::new(&r)?),
+                    name:              format!("{}_{}", name, r.mac_address),
+                    value:             r.rssi.into(),
+                    attr:              Some(Document::new(&r)?),
+                    is_cluster_device: false,
                 };
                 self.app.mqtt.update_device(&dev).await?;
             }
@@ -112,6 +155,7 @@ impl Service for BluetoothService {
                                     name:  format!("{}_{}", name, address.to_string()),
                                     value: rssi.into(),
                                     attr:  Some(Document::new(&reading)?),
+                                    is_cluster_device: false,
                                 };
                                 self.app.mqtt.update_device(&dev).await?;
                                 r.insert(address.to_string(), reading);
