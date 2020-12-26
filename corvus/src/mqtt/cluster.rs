@@ -19,7 +19,13 @@ impl ClusterState {
             node_name,
             current_leader: None,
             last_timestamp: SystemTime::now(),
-            sid: thread_rng().sample_iter(&Alphanumeric).take(30).collect(),
+            sid: String::from_utf8(
+                thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(30)
+                    .collect::<Vec<u8>>(),
+            )
+            .unwrap(),
         })))
     }
 

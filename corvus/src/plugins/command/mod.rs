@@ -26,7 +26,7 @@ impl CommandService {
 }
 
 #[async_trait]
-impl Service for CommandService {
+impl Plugin for CommandService {
     async fn leader_heartbeat(&self, _: String, _: ClusterNodes) -> Result<()> {
         Ok(())
     }

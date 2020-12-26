@@ -32,7 +32,7 @@ impl BluetoothService {
 }
 
 #[async_trait]
-impl Service for BluetoothService {
+impl Plugin for BluetoothService {
     async fn leader_heartbeat(&self, name: String, data: ClusterNodes) -> Result<()> {
         trace!("BluetoothService Leader Heartbeat");
         let mut node_data: HashMap<String, (String, i8, Document)> = Default::default();

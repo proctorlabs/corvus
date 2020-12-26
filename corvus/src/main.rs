@@ -14,14 +14,15 @@ mod args;
 mod config;
 mod data_structures;
 mod mqtt;
+mod plugins;
 mod prelude;
-mod services;
 mod triggers;
 
 use mqtt::MQTTService;
 pub use prelude::*;
 
-#[tokio::main(core_threads = 6)]
+// #[tokio::main(core_threads = 6)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() -> Result<()> {
     App::new().await?.start().await
 }
@@ -33,7 +34,7 @@ pub struct App(Arc<AppServices>);
 pub struct AppServices {
     pub config:       Arc<Configuration>,
     pub mqtt:         MQTTService,
-    pub services:     Mutex<Vec<services::Services>>,
+    pub plugins:      Mutex<Vec<plugins::Plugins>>,
     pub cluster_data: ClusterNodes,
 }
 
@@ -74,7 +75,7 @@ impl App {
             .await?;
             Ok(App(Arc::new(AppServices {
                 config,
-                services: Mutex::new(vec![]),
+                plugins: Mutex::new(vec![]),
                 mqtt: mqtt_service,
                 cluster_data,
             })))
@@ -85,7 +86,7 @@ impl App {
         trace!("Running MQTT heartbeat");
         self.mqtt.heartbeat().await?;
         let is_leader = self.mqtt.is_leader().await;
-        for svc in &*self.services.lock().await {
+        for svc in &*self.plugins.lock().await {
             trace!("Running service heartbeat: {:?}", svc.name());
             svc.heartbeat().await?;
             if is_leader {
@@ -98,9 +99,9 @@ impl App {
 
     pub async fn start(&self) -> Result<()> {
         self.mqtt.start()?;
-        let mut svcs = self.services.lock().await;
+        let mut svcs = self.plugins.lock().await;
         for svc in self.config.services.iter() {
-            let s = services::Services::new(svc.clone(), self.clone());
+            let s = plugins::Plugins::new(svc.clone(), self.clone());
             s.start()?;
             svcs.insert(0, s);
         }

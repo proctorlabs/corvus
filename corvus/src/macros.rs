@@ -25,10 +25,10 @@ macro_rules! service_interval {
 macro_rules! spawn {
     ($($content:tt)*) => {
         tokio::spawn(async move {
-            use tokio::stream::StreamExt;
-            let mut throttle = tokio::time::throttle(std::time::Duration::from_secs(2), futures::stream::repeat(true));
+            // use tokio_stream::StreamExt;
+            let mut throttle = tokio::time::interval(std::time::Duration::from_secs(2));
             loop {
-                throttle.next().await;
+                throttle.tick().await;
                 #[allow(unused_variables)]
                 let r = async {
                     $( $content )*

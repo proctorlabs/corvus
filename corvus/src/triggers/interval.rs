@@ -12,7 +12,7 @@ impl IntervalTrigger {
 }
 
 impl Trigger for IntervalTrigger {
-    fn init(&self, service: Services) -> Result<()> {
+    fn init(&self, service: Plugins) -> Result<()> {
         info!(
             "Starting service '{}' with interval trigger every {} seconds.",
             service.name(),

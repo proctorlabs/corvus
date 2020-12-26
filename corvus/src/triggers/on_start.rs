@@ -10,7 +10,7 @@ impl OnStartTrigger {
 }
 
 impl Trigger for OnStartTrigger {
-    fn init(&self, service: Services) -> Result<()> {
+    fn init(&self, service: Plugins) -> Result<()> {
         info!("Starting service '{}'", service.name());
         spawn! {
             service.run().await?;

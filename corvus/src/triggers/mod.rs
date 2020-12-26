@@ -1,4 +1,4 @@
-use crate::{config::TriggerConfiguration, services::Services, *};
+use crate::{config::TriggerConfiguration, plugins::Plugins, *};
 use interval::IntervalTrigger;
 use on_start::OnStartTrigger;
 
@@ -6,7 +6,7 @@ mod interval;
 mod on_start;
 
 pub trait Trigger {
-    fn init(&self, service: Services) -> Result<()>;
+    fn init(&self, service: Plugins) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -27,7 +27,7 @@ impl Triggers {
         }
     }
 
-    pub fn init(&self, service: Services) -> Result<()> {
+    pub fn init(&self, service: Plugins) -> Result<()> {
         match self {
             Triggers::Interval(trigger) => trigger.init(service),
             Triggers::MQTT(trigger) => trigger.init(service),

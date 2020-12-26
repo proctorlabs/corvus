@@ -211,7 +211,7 @@ impl MQTTService {
         mfr.identifiers = Some(normalize_name(&self.location));
 
         let mut ent = HassDiscoveryPayload::default();
-        ent.name = Some(device.name.to_string());
+        ent.name = Some(uniq_id.to_string());
         ent.device = Some(mfr);
         ent.unique_id = Some(uniq_id.to_string());
         ent.base_topic = Some(base_topic);
