@@ -2,6 +2,7 @@ use linux_embedded_hal::{gpio_cdev::*, CdevPin};
 use nix::unistd::close;
 use std::{
     fmt,
+    fmt::Debug,
     os::unix::io::AsRawFd,
     time::{Duration, Instant},
 };
@@ -24,14 +25,25 @@ pub enum Errors {
     Checksum,
 }
 
-// #[derive(Debug)]
 pub enum DHTState {
     Init,
     Write(CdevPin),
     Read(CdevPin),
 }
 
-// #[derive(Debug)]
+impl Debug for DHTState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DHTState").finish()
+    }
+}
+
+impl Clone for DHTState {
+    fn clone(&self) -> Self {
+        Self::Init
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DHT {
     line:      Option<Line>,
     state:     DHTState,

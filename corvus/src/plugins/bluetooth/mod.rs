@@ -17,14 +17,14 @@ struct Reading {
 }
 
 #[derive(Clone, Debug)]
-pub struct BluetoothService {
+pub struct BluetoothPlugin {
     pub app:  App,
     readings: SharedRwLock<HashMap<String, Reading>>,
 }
 
-impl BluetoothService {
+impl BluetoothPlugin {
     pub fn new(app: App) -> Self {
-        BluetoothService {
+        Self {
             readings: Default::default(),
             app,
         }
@@ -32,7 +32,7 @@ impl BluetoothService {
 }
 
 #[async_trait]
-impl Plugin for BluetoothService {
+impl Plugin for BluetoothPlugin {
     async fn leader_heartbeat(&self, name: String, data: ClusterNodes) -> Result<()> {
         trace!("BluetoothService Leader Heartbeat");
         let mut node_data: HashMap<String, (String, i8, Document)> = Default::default();
@@ -76,7 +76,7 @@ impl Plugin for BluetoothService {
     }
 
     async fn heartbeat(&self, name: String) -> Result<()> {
-        trace!("BluetoothService Heartbeat");
+        trace!("BluetoothPlugin Heartbeat");
         let n = Utc::now();
         let readings = self.readings.read().await;
         for (mac, reading) in readings.iter() {
@@ -104,7 +104,7 @@ impl Plugin for BluetoothService {
     }
 
     async fn run(&self, name: String) -> Result<()> {
-        debug!("Initialize bluetooth services");
+        debug!("Initialize bluetooth plugin");
         let mut client = BlueZClient::new()?;
 
         let controllers = client.get_controller_list().await?;

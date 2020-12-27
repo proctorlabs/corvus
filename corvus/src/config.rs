@@ -8,18 +8,18 @@ use std::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Configuration {
-    pub node:     Arc<NodeConfiguration>,
-    pub mqtt:     Arc<MQTTConfiguration>,
-    #[serde(rename = "service")]
-    pub services: Vec<Arc<ServiceConfiguration>>,
+    pub node:    Arc<NodeConfiguration>,
+    pub mqtt:    Arc<MQTTConfiguration>,
+    #[serde(rename = "plugin")]
+    pub plugins: Vec<Arc<PluginConfiguration>>,
 }
 
 impl Default for Configuration {
     fn default() -> Self {
         Configuration {
-            services: vec![Default::default()],
-            node:     Default::default(),
-            mqtt:     Default::default(),
+            plugins: vec![Default::default()],
+            node:    Default::default(),
+            mqtt:    Default::default(),
         }
     }
 }
@@ -62,36 +62,40 @@ impl Default for MQTTConfiguration {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", default)]
-pub struct ServiceConfiguration {
+pub struct PluginConfiguration {
     pub name:    String,
     #[serde(rename = "definition")]
-    pub service: Arc<ServiceTypeConfiguration>,
+    pub plugin:  Arc<PluginOptions>,
     pub trigger: Arc<TriggerConfiguration>,
 }
 
-impl Default for ServiceConfiguration {
+impl Default for PluginConfiguration {
     fn default() -> Self {
-        ServiceConfiguration {
+        Self {
             name:    Default::default(),
             trigger: Default::default(),
-            service: Default::default(),
+            plugin:  Default::default(),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, tag = "type", rename_all = "snake_case")]
-pub enum ServiceTypeConfiguration {
+pub enum PluginOptions {
     Command {
         command: String,
         args:    Vec<String>,
     },
     Bluetooth {},
+    DHT {
+        device:  String,
+        channel: u32,
+    },
 }
 
-impl Default for ServiceTypeConfiguration {
+impl Default for PluginOptions {
     fn default() -> Self {
-        ServiceTypeConfiguration::Bluetooth {}
+        Self::Bluetooth {}
     }
 }
 

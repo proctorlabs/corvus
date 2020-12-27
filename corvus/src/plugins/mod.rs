@@ -1,11 +1,66 @@
-use crate::{config::ServiceTypeConfiguration, prelude::*, triggers::Triggers};
+use crate::{config::PluginOptions, prelude::*, triggers::Triggers};
 use async_trait::async_trait;
-use bluetooth::BluetoothService;
-use command::CommandService;
+use bluetooth::BluetoothPlugin;
+use command::CommandPlugin;
+use dht::DHTPlugin;
 
 mod bluetooth;
 mod command;
 mod dht;
+
+macro_rules! plugins {
+    ($($name:ident $plugin:ty,)*) => {
+        #[derive(Debug, Clone)]
+        pub enum Plugins {
+            $($name {
+                name: String,
+                trigger: Triggers,
+                service: $plugin,
+            },)*
+        }
+
+        impl Plugins {
+            pub async fn heartbeat(&self) -> Result<()> {
+                match self {
+                    $(Plugins::$name { service, name, .. } => service.heartbeat(name.to_string()).await,)*
+                }
+            }
+
+            pub async fn leader_heartbeat(&self, data: ClusterNodes) -> Result<()> {
+                match self {
+                    $(Plugins::$name { service, name, .. } => {
+                        service.leader_heartbeat(name.to_string(), data).await
+                    })*
+                }
+            }
+
+            pub async fn run(&self) -> Result<()> {
+                match self {
+                    $(Plugins::$name { service, name, .. } => service.run(name.to_string()).await,)*
+                }
+            }
+
+            pub fn start(&self) -> Result<()> {
+                let svc = self.clone();
+                match self {
+                    $(Plugins::$name { trigger, .. } => trigger.init(svc),)*
+                }
+            }
+
+            pub fn name(&self) -> &str {
+                match self {
+                    $(Plugins::$name { name, .. } => name,)*
+                }
+            }
+        }
+    };
+}
+
+plugins! {
+    Command CommandPlugin,
+    Bluetooth BluetoothPlugin,
+    DHT DHTPlugin,
+}
 
 #[async_trait]
 pub trait Plugin {
@@ -14,75 +69,26 @@ pub trait Plugin {
     async fn leader_heartbeat(&self, name: String, data: ClusterNodes) -> Result<()>;
 }
 
-#[derive(Debug, Clone)]
-pub enum Plugins {
-    Command {
-        name:    String,
-        trigger: Triggers,
-        service: CommandService,
-    },
-    Bluetooth {
-        name:    String,
-        trigger: Triggers,
-        service: BluetoothService,
-    },
-}
-
 impl Plugins {
-    pub fn new(config: Arc<ServiceConfiguration>, app: App) -> Self {
+    pub fn new(config: Arc<PluginConfiguration>, app: App) -> Self {
         let name = config.name.to_string();
         let trigger = Triggers::new(config.trigger.clone());
-        match &*config.service {
-            ServiceTypeConfiguration::Command { command, args } => Plugins::Command {
+        match &*config.plugin {
+            PluginOptions::Command { command, args } => Plugins::Command {
                 name,
                 trigger,
-                service: CommandService::new(app, command.to_string(), args.clone()),
+                service: CommandPlugin::new(app, command.to_string(), args.clone()),
             },
-            ServiceTypeConfiguration::Bluetooth { .. } => Plugins::Bluetooth {
+            PluginOptions::Bluetooth { .. } => Plugins::Bluetooth {
                 name,
                 trigger,
-                service: BluetoothService::new(app),
+                service: BluetoothPlugin::new(app),
             },
-        }
-    }
-
-    pub async fn heartbeat(&self) -> Result<()> {
-        match self {
-            Plugins::Command { service, name, .. } => service.heartbeat(name.to_string()).await,
-            Plugins::Bluetooth { service, name, .. } => service.heartbeat(name.to_string()).await,
-        }
-    }
-
-    pub async fn leader_heartbeat(&self, data: ClusterNodes) -> Result<()> {
-        match self {
-            Plugins::Command { service, name, .. } => {
-                service.leader_heartbeat(name.to_string(), data).await
-            }
-            Plugins::Bluetooth { service, name, .. } => {
-                service.leader_heartbeat(name.to_string(), data).await
-            }
-        }
-    }
-
-    pub async fn run(&self) -> Result<()> {
-        match self {
-            Plugins::Command { service, name, .. } => service.run(name.to_string()).await,
-            Plugins::Bluetooth { service, name, .. } => service.run(name.to_string()).await,
-        }
-    }
-
-    pub fn start(&self) -> Result<()> {
-        let svc = self.clone();
-        match self {
-            Plugins::Command { trigger, .. } => trigger.init(svc),
-            Plugins::Bluetooth { trigger, .. } => trigger.init(svc),
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Plugins::Command { name, .. } => name,
-            Plugins::Bluetooth { name, .. } => name,
+            PluginOptions::DHT { device, channel } => Plugins::DHT {
+                name,
+                trigger,
+                service: DHTPlugin::new(device.into(), *channel).unwrap(),
+            },
         }
     }
 }

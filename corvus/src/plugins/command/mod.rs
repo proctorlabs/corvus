@@ -13,20 +13,20 @@ struct CommandPayload {
 }
 
 #[derive(Clone, Debug)]
-pub struct CommandService {
+pub struct CommandPlugin {
     pub app:     App,
     pub command: String,
     pub args:    Vec<String>,
 }
 
-impl CommandService {
+impl CommandPlugin {
     pub fn new(app: App, command: String, args: Vec<String>) -> Self {
-        CommandService { app, command, args }
+        Self { app, command, args }
     }
 }
 
 #[async_trait]
-impl Plugin for CommandService {
+impl Plugin for CommandPlugin {
     async fn leader_heartbeat(&self, _: String, _: ClusterNodes) -> Result<()> {
         Ok(())
     }

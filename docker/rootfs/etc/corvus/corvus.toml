@@ -4,8 +4,8 @@ location = "home"
 [mqtt]
 client_id = "corvus-mqtt"
 
-[[service]]
+[[plugin]]
 name = "bluetooth"
 
-[service.definition]
+[plugin.definition]
 type = "bluetooth"

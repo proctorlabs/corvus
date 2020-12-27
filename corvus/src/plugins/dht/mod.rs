@@ -45,7 +45,7 @@ struct DHTPayload {
     temperature: f32,
 }
 
-// #[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DHTPlugin {
     dht: DHT,
 }

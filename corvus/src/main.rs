@@ -100,7 +100,7 @@ impl App {
     pub async fn start(&self) -> Result<()> {
         self.mqtt.start()?;
         let mut svcs = self.plugins.lock().await;
-        for svc in self.config.services.iter() {
+        for svc in self.config.plugins.iter() {
             let s = plugins::Plugins::new(svc.clone(), self.clone());
             s.start()?;
             svcs.insert(0, s);
