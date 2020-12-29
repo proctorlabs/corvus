@@ -87,7 +87,7 @@ impl Plugins {
             PluginOptions::DHT { device, channel } => Plugins::DHT {
                 name,
                 trigger,
-                service: DHTPlugin::new(device.into(), *channel).unwrap(),
+                service: DHTPlugin::new(app, device.into(), *channel),
             },
         }
     }

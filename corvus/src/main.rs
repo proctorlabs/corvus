@@ -83,11 +83,11 @@ impl App {
     }
 
     async fn heartbeat(&self) -> Result<()> {
-        trace!("Running MQTT heartbeat");
+        debug!("Running MQTT heartbeat");
         self.mqtt.heartbeat().await?;
         let is_leader = self.mqtt.is_leader().await;
         for svc in &*self.plugins.lock().await {
-            trace!("Running service heartbeat: {:?}", svc.name());
+            debug!("Running plugin heartbeat: {:?}", svc.name());
             svc.heartbeat().await?;
             if is_leader {
                 svc.leader_heartbeat(self.cluster_data.clone()).await?;

@@ -1,42 +1,10 @@
+use super::*;
 use dht22::*;
-use linux_embedded_hal::{gpio_cdev::*, CdevPin};
-use nix::unistd::close;
-use std::{
-    env, fmt,
-    os::unix::io::AsRawFd,
-    time::{Duration, Instant},
-};
+use serde::{Deserialize, Serialize};
+use tokio::runtime::Handle;
+use unstructured::Document;
 
 mod dht22;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
-    let chip = &args[1];
-    let offset: u32 = args[2].parse()?;
-    let mut dht = DHT::new(chip, offset)?;
-    loop {
-        let reading = dht.get_reading();
-        match reading {
-            Ok(val) => {
-                println!("{:?}", val);
-                std::thread::sleep(Duration::from_secs(12));
-            }
-            Err(e) => {
-                println!("{:?}", e);
-                // std::thread::sleep(Duration::from_secs(5));
-            }
-        }
-        // std::thread::sleep(Duration::from_secs(12));
-    }
-    unreachable!();
-    Ok(())
-}
-
-use super::*;
-use serde::{Deserialize, Serialize};
-use std::process::Stdio;
-use tokio::process::Command;
-use unstructured::Document;
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
@@ -47,14 +15,16 @@ struct DHTPayload {
 
 #[derive(Debug, Clone)]
 pub struct DHTPlugin {
+    app: App,
     dht: DHT,
 }
 
 impl DHTPlugin {
-    pub fn new(device: String, channel: u32) -> Result<Self> {
-        Ok(DHTPlugin {
+    pub fn new(app: App, device: String, channel: u32) -> Self {
+        DHTPlugin {
+            app,
             dht: DHT::new(&device, channel).unwrap(),
-        })
+        }
     }
 }
 
@@ -65,10 +35,59 @@ impl Plugin for DHTPlugin {
     }
 
     async fn heartbeat(&self, name: String) -> Result<()> {
+        self.app
+            .mqtt
+            .add_device(DeviceInfo {
+                name:              format!("{}_temperature", name),
+                typ:               DeviceType::Sensor,
+                is_cluster_device: false,
+            })
+            .await?;
+        self.app
+            .mqtt
+            .add_device(DeviceInfo {
+                name:              format!("{}_humidity", name),
+                typ:               DeviceType::Sensor,
+                is_cluster_device: false,
+            })
+            .await?;
         Ok(())
     }
 
     async fn run(&self, name: String) -> Result<()> {
+        let mut zelf = self.clone();
+        match Handle::current()
+            .spawn_blocking(move || {
+                let mut last_result = zelf.dht.get_reading();
+                let mut i = 0;
+                while last_result.is_err() && i < 10 {
+                    last_result = zelf.dht.get_reading();
+                    i += 1;
+                }
+                last_result
+            })
+            .await?
+        {
+            Ok(r) => {
+                let update = DeviceUpdate {
+                    name:              format!("{}_humidity", name),
+                    value:             r.humidity.into(),
+                    attr:              Some(Document::String("".into())),
+                    is_cluster_device: false,
+                };
+                self.app.mqtt.update_device(&update).await?;
+                let update = DeviceUpdate {
+                    name:              format!("{}_temperature", name),
+                    value:             r.temperature.into(),
+                    attr:              Some(Document::String("".into())),
+                    is_cluster_device: false,
+                };
+                self.app.mqtt.update_device(&update).await?;
+            }
+            Err(e) => {
+                warn!("Read device failed due to {:?}", e);
+            }
+        };
         Ok(())
     }
 }

@@ -62,3 +62,9 @@ docker-xbuild-run arch:
         --cap-add=NET_ADMIN \
         --net=host \
             corvus
+
+run-arm:
+    cross build --target aarch64-unknown-linux-gnu --release
+    scp target/aarch64-unknown-linux-gnu/release/corvus phils-room.beacons.proctor.id:/home/phil/corvus
+    scp corvus.toml phils-room.beacons.proctor.id:/home/phil/corvus.toml
+    ssh phils-room.beacons.proctor.id sudo ./corvus -c corvus.toml -v

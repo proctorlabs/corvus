@@ -403,6 +403,7 @@ dependencies = [
  "linux-embedded-hal",
  "log",
  "nix 0.19.1",
+ "parking_lot",
  "rand 0.8.0",
  "rumqttc",
  "serde",
