@@ -18,10 +18,10 @@ impl Trigger for IntervalTrigger {
             service.name(),
             self.interval
         );
-        let interval = self.interval;
-        service_interval!((interval) : {
-            service.run().await?;
-        });
+        start_service(Duration::from_secs(self.interval), move || {
+            let service = service.clone();
+            async move { service.run().await }
+        })?;
         Ok(())
     }
 }

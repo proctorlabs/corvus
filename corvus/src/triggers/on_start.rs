@@ -12,9 +12,10 @@ impl OnStartTrigger {
 impl Trigger for OnStartTrigger {
     fn init(&self, service: Plugins) -> Result<()> {
         info!("Starting service '{}'", service.name());
-        spawn! {
-            service.run().await?;
-        };
+        start_service(Duration::from_secs(2), move || {
+            let service = service.clone();
+            async move { service.run().await }
+        })?;
         Ok(())
     }
 }

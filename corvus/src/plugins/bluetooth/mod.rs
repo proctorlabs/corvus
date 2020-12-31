@@ -18,15 +18,17 @@ struct Reading {
 
 #[derive(Clone, Debug)]
 pub struct BluetoothPlugin {
-    pub app:  App,
+    registry: DeviceRegistry,
+    mqtt:     MQTTService,
     readings: SharedRwLock<HashMap<String, Reading>>,
 }
 
 impl BluetoothPlugin {
-    pub fn new(app: App) -> Self {
+    pub fn new(registry: DeviceRegistry, mqtt: MQTTService) -> Self {
         Self {
             readings: Default::default(),
-            app,
+            registry,
+            mqtt,
         }
     }
 }
@@ -56,21 +58,21 @@ impl Plugin for BluetoothPlugin {
             if rssi == i8::MIN {
                 loc = "none".into();
             }
-            self.app
-                .mqtt
-                .add_device(DeviceInfo {
-                    name:              format!("{}_location", dev_id),
-                    typ:               DeviceType::Sensor,
-                    is_cluster_device: true,
-                })
+            self.registry
+                .register(Device::new(
+                    format!("{}_location", dev_id),
+                    DeviceType::Sensor(SensorDeviceClass::None),
+                    true,
+                ))
                 .await?;
+
             let dev = DeviceUpdate {
-                name:              format!("{}_location", dev_id),
-                value:             loc.into(),
-                attr:              Some(attr),
+                attr,
+                name: format!("{}_location", dev_id),
+                value: loc.into(),
                 is_cluster_device: true,
             };
-            self.app.mqtt.update_device(&dev).await?;
+            self.mqtt.update_device(&dev).await?;
         }
         Ok(())
     }
@@ -80,13 +82,12 @@ impl Plugin for BluetoothPlugin {
         let n = Utc::now();
         let readings = self.readings.read().await;
         for (mac, reading) in readings.iter() {
-            self.app
-                .mqtt
-                .add_device(DeviceInfo {
-                    name:              format!("{}_{}", name, mac),
-                    typ:               DeviceType::Sensor,
-                    is_cluster_device: false,
-                })
+            self.registry
+                .register(Device::new(
+                    format!("{}_{}", name, mac),
+                    DeviceType::Sensor(SensorDeviceClass::SignalStrength),
+                    false,
+                ))
                 .await?;
             if n.signed_duration_since(reading.timestamp).num_seconds() > 60 {
                 let mut r = reading.clone();
@@ -94,10 +95,10 @@ impl Plugin for BluetoothPlugin {
                 let dev = DeviceUpdate {
                     name:              format!("{}_{}", name, r.mac_address),
                     value:             r.rssi.into(),
-                    attr:              Some(Document::new(&r)?),
+                    attr:              Document::new(&r)?,
                     is_cluster_device: false,
                 };
-                self.app.mqtt.update_device(&dev).await?;
+                self.mqtt.update_device(&dev).await?;
             }
         }
         Ok(())
@@ -155,10 +156,10 @@ impl Plugin for BluetoothPlugin {
                                 let dev = DeviceUpdate {
                                     name:  format!("{}_{}", name, address.to_string()),
                                     value: rssi.into(),
-                                    attr:  Some(Document::new(&reading)?),
+                                    attr:  Document::new(&reading)?,
                                     is_cluster_device: false,
                                 };
-                                self.app.mqtt.update_device(&dev).await?;
+                                self.mqtt.update_device(&dev).await?;
                                 r.insert(address.to_string(), reading);
                             }
                         }

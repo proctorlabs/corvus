@@ -283,14 +283,18 @@ impl Reading {
         if actual != expected {
             trace!(
                 "Failed checksum: Actual[{}] Expected[{}] bytes[{:?}]",
-                actual, expected, bytes
+                actual,
+                expected,
+                bytes
             );
             // debug!("Checksum failed, Next.. {}", i);
             return Err(Errors::Checksum.into());
         }
         trace!(
             "Passed checksum: Actual[{}] Expected[{}] bytes[{:?}]",
-            actual, expected, bytes
+            actual,
+            expected,
+            bytes
         );
         let h_dec = bytes[0] as u16 * 256 + bytes[1] as u16;
         let humidity = h_dec as f32 / 10.0f32;

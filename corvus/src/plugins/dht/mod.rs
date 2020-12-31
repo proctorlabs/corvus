@@ -15,14 +15,16 @@ struct DHTPayload {
 
 #[derive(Debug, Clone)]
 pub struct DHTPlugin {
-    app: App,
-    dht: DHT,
+    mqtt:     MQTTService,
+    registry: DeviceRegistry,
+    dht:      DHT,
 }
 
 impl DHTPlugin {
-    pub fn new(app: App, device: String, channel: u32) -> Self {
+    pub fn new(mqtt: MQTTService, registry: DeviceRegistry, device: String, channel: u32) -> Self {
         DHTPlugin {
-            app,
+            mqtt,
+            registry,
             dht: DHT::new(&device, channel).unwrap(),
         }
     }
@@ -35,21 +37,19 @@ impl Plugin for DHTPlugin {
     }
 
     async fn heartbeat(&self, name: String) -> Result<()> {
-        self.app
-            .mqtt
-            .add_device(DeviceInfo {
-                name:              format!("{}_temperature", name),
-                typ:               DeviceType::Sensor,
-                is_cluster_device: false,
-            })
+        self.registry
+            .register(Device::new(
+                format!("{}_temperature", name),
+                DeviceType::Sensor(SensorDeviceClass::Temperature),
+                false,
+            ))
             .await?;
-        self.app
-            .mqtt
-            .add_device(DeviceInfo {
-                name:              format!("{}_humidity", name),
-                typ:               DeviceType::Sensor,
-                is_cluster_device: false,
-            })
+        self.registry
+            .register(Device::new(
+                format!("{}_humidity", name),
+                DeviceType::Sensor(SensorDeviceClass::Humidity),
+                false,
+            ))
             .await?;
         Ok(())
     }
@@ -72,17 +72,17 @@ impl Plugin for DHTPlugin {
                 let update = DeviceUpdate {
                     name:              format!("{}_humidity", name),
                     value:             r.humidity.into(),
-                    attr:              Some(Document::String("".into())),
+                    attr:              Default::default(),
                     is_cluster_device: false,
                 };
-                self.app.mqtt.update_device(&update).await?;
+                self.mqtt.update_device(&update).await?;
                 let update = DeviceUpdate {
                     name:              format!("{}_temperature", name),
                     value:             r.temperature.into(),
-                    attr:              Some(Document::String("".into())),
+                    attr:              Default::default(),
                     is_cluster_device: false,
                 };
-                self.app.mqtt.update_device(&update).await?;
+                self.mqtt.update_device(&update).await?;
             }
             Err(e) => {
                 warn!("Read device failed due to {:?}", e);

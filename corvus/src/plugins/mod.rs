@@ -77,17 +77,27 @@ impl Plugins {
             PluginOptions::Command { command, args } => Plugins::Command {
                 name,
                 trigger,
-                service: CommandPlugin::new(app, command.to_string(), args.clone()),
+                service: CommandPlugin::new(
+                    app.mqtt.clone(),
+                    app.device_registry.clone(),
+                    command.to_string(),
+                    args.clone(),
+                ),
             },
             PluginOptions::Bluetooth { .. } => Plugins::Bluetooth {
                 name,
                 trigger,
-                service: BluetoothPlugin::new(app),
+                service: BluetoothPlugin::new(app.device_registry.clone(), app.mqtt.clone()),
             },
             PluginOptions::DHT { device, channel } => Plugins::DHT {
                 name,
                 trigger,
-                service: DHTPlugin::new(app, device.into(), *channel),
+                service: DHTPlugin::new(
+                    app.mqtt.clone(),
+                    app.device_registry.clone(),
+                    device.into(),
+                    *channel,
+                ),
             },
         }
     }

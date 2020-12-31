@@ -14,14 +14,25 @@ struct CommandPayload {
 
 #[derive(Clone, Debug)]
 pub struct CommandPlugin {
-    pub app:     App,
-    pub command: String,
-    pub args:    Vec<String>,
+    mqtt:     MQTTService,
+    registry: DeviceRegistry,
+    command:  String,
+    args:     Vec<String>,
 }
 
 impl CommandPlugin {
-    pub fn new(app: App, command: String, args: Vec<String>) -> Self {
-        Self { app, command, args }
+    pub fn new(
+        mqtt: MQTTService,
+        registry: DeviceRegistry,
+        command: String,
+        args: Vec<String>,
+    ) -> Self {
+        Self {
+            mqtt,
+            registry,
+            command,
+            args,
+        }
     }
 }
 
@@ -32,13 +43,12 @@ impl Plugin for CommandPlugin {
     }
 
     async fn heartbeat(&self, name: String) -> Result<()> {
-        self.app
-            .mqtt
-            .add_device(DeviceInfo {
+        self.registry
+            .register(Device::new(
                 name,
-                typ: DeviceType::Sensor,
-                is_cluster_device: false,
-            })
+                DeviceType::Sensor(SensorDeviceClass::None),
+                false,
+            ))
             .await
     }
 
@@ -55,18 +65,16 @@ impl Plugin for CommandPlugin {
         let update = DeviceUpdate {
             name,
             value: stdout.trim().into(),
-            attr: Some(
-                CommandPayload {
-                    status: output.status.code().unwrap_or_default(),
-                    stdout: stdout.trim().into(),
-                    stderr: stderr.trim().into(),
-                }
-                .into(),
-            ),
+            attr: CommandPayload {
+                status: output.status.code().unwrap_or_default(),
+                stdout: stdout.trim().into(),
+                stderr: stderr.trim().into(),
+            }
+            .into(),
             is_cluster_device: false,
         };
 
-        self.app.mqtt.update_device(&update).await
+        self.mqtt.update_device(&update).await
     }
 }
 
