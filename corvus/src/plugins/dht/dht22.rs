@@ -305,7 +305,7 @@ impl Reading {
             temperature *= -1.0f32;
         }
 
-        if humidity < 0.0 || humidity > 100.0 || temperature < 0.0 || temperature > 60.0 {
+        if !(0.0..=100.0).contains(&humidity) || temperature < 0.0 || temperature > 60.0 {
             // debug!("Values out of range, Next.. {}", i);
             return Err(Errors::Checksum.into());
         }

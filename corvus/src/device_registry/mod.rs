@@ -4,7 +4,7 @@ mod hass;
 use crate::prelude::*;
 pub use devices::*;
 pub use hass::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Clone, Debug, Deref)]
 pub struct DeviceRegistry(DeviceRegistryInner);
@@ -13,6 +13,18 @@ pub struct DeviceRegistry(DeviceRegistryInner);
 pub struct DeviceRegistryInner {
     devices: Arc<RwLock<HashMap<String, Arc<Device>>>>,
     mqtt:    MQTTService,
+}
+
+#[async_trait]
+impl StaticService for DeviceRegistry {
+    const NAME: &'static str = "Device Registry";
+    const START_IMMEDIATELY: bool = false;
+    const ADD_JITTER: bool = false;
+    const DURATION: Duration = Duration::from_secs(120);
+
+    async fn exec_service(zelf: Self) -> Result<()> {
+        zelf.publish_all().await
+    }
 }
 
 impl DeviceRegistry {

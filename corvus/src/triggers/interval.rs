@@ -20,7 +20,8 @@ impl Trigger for IntervalTrigger {
         );
         start_service(
             Duration::from_secs(self.interval),
-            "Interval trigger".into(),
+            format!("Interval trigger for {}", service.name()),
+            false,
             false,
             move || {
                 let service = service.clone();

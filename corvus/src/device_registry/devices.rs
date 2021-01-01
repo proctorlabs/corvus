@@ -29,6 +29,7 @@ impl Device {
         }))
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     pub fn to_discovery(&self, location: String, base_topic: String) -> HassDiscoveryPayload {
         let location = location.to_lowercase().replace(":", "").replace("-", "_");
         let uniq_id = if self.cluster_wide() {

@@ -61,50 +61,66 @@ impl App {
         }
     }
 
-    async fn heartbeat(&self) -> Result<()> {
-        debug!("Running MQTT heartbeat");
-        self.mqtt.heartbeat().await?;
-        let is_leader = self.mqtt.is_leader().await;
+    async fn init_heartbeats(&self) -> Result<()> {
+        let zelf = self.clone();
+        start_service(
+            Duration::from_secs(10),
+            "MQTT Heartbeat".into(),
+            true,
+            true,
+            move || {
+                let zelf = zelf.clone();
+                async move { zelf.mqtt.heartbeat().await }
+            },
+        )?;
+
         for svc in &*self.plugins.lock().await {
-            debug!("Running plugin heartbeat: {:?}", svc.name());
-            svc.heartbeat().await?;
-            if is_leader {
-                svc.leader_heartbeat(self.cluster_data.clone()).await?;
-            }
+            let svc = svc.clone();
+            let zelf = self.clone();
+            start_service(
+                Duration::from_secs(10),
+                format!("{} Plugin Heartbeat", svc.name()),
+                true,
+                false,
+                move || {
+                    let svc = svc.clone();
+                    let zelf = zelf.clone();
+                    async move {
+                        svc.heartbeat().await?;
+                        if zelf.mqtt.is_leader().await {
+                            svc.leader_heartbeat(zelf.cluster_data.clone()).await?;
+                        }
+                        Ok(())
+                    }
+                },
+            )?;
         }
-        if self.mqtt.is_leader().await {}
         Ok(())
     }
 
-    pub async fn start(&self) -> Result<()> {
-        self.mqtt.start()?;
+    async fn init_plugins(&self) -> Result<()> {
         let mut svcs = self.plugins.lock().await;
         for svc in self.config.plugins.iter() {
             let s = Plugins::new(svc.clone(), self.clone());
             s.start()?;
             svcs.insert(0, s);
         }
-        drop(svcs);
-        let zelf = self.clone();
-        start_service(
-            Duration::from_secs(10),
-            "Heartbeat".into(),
-            true,
-            move || {
-                let zelf = zelf.clone();
-                async move { zelf.heartbeat().await }
-            },
-        )?;
-        let zelf = self.clone();
-        start_service(
-            Duration::from_secs(120),
-            "Device registration".into(),
-            false,
-            move || {
-                let zelf = zelf.clone();
-                async move { zelf.device_registry.publish_all().await }
-            },
-        )?;
+        Ok(())
+    }
+
+    async fn init_mqtt(&self) -> Result<()> {
+        self.mqtt.start_service()
+    }
+
+    async fn init_device_registry(&self) -> Result<()> {
+        self.device_registry.start_service()
+    }
+
+    pub async fn start(&self) -> Result<()> {
+        self.init_mqtt().await?;
+        self.init_plugins().await?;
+        self.init_heartbeats().await?;
+        self.init_device_registry().await?;
         tokio::signal::ctrl_c().await?;
         warn!("Signal received, shutting down");
         Ok(())

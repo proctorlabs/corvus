@@ -1,4 +1,5 @@
-use crate::{prelude::*, MQTTConfiguration, Result};
+use crate::{prelude::*, util::StaticService, MQTTConfiguration, Result};
+use async_trait::async_trait;
 use cluster::ClusterState;
 use rumqttc::{self, AsyncClient, Event, EventLoop, Incoming, LastWill, MqttOptions, QoS};
 use std::{sync::Arc, time::Duration};
@@ -33,6 +34,45 @@ impl std::fmt::Debug for MQTTService {
             .field("location", &self.location)
             .field("cluster", &self.cluster)
             .finish()
+    }
+}
+
+#[async_trait]
+impl StaticService for MQTTService {
+    const NAME: &'static str = "MQTT";
+    const START_IMMEDIATELY: bool = true;
+    const ADD_JITTER: bool = false;
+    const DURATION: Duration = Duration::from_secs(10);
+
+    async fn exec_service(zelf: Self) -> Result<()> {
+        // zelf.poll_leader().await
+        let mqtt = zelf.clone();
+        mqtt.client
+            .publish(&mqtt.availability_topic, QoS::AtLeastOnce, true, "online")
+            .await?;
+        mqtt.client
+            .subscribe(format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
+            .await?;
+        mqtt.client
+            .subscribe(&mqtt.leader_topic, QoS::AtLeastOnce)
+            .await?;
+
+        // Main loop
+        let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
+        loop {
+            match mqtt.eventloop.lock().await.poll().await {
+                Ok(Event::Incoming(Incoming::Publish(p))) => {
+                    mqtt.handle_message(p)
+                        .await
+                        .unwrap_or_else(|e| warn!("Error polling event: {:?}", e));
+                }
+                Err(e) => {
+                    error!("Error received on MQTT poll: {:?}", e);
+                    interval.tick().await;
+                }
+                Ok(_) => (),
+            }
+        }
     }
 }
 
@@ -116,6 +156,7 @@ impl MQTTService {
             Duration::from_secs(2),
             "MQTT Service".into(),
             true,
+            false,
             move || {
                 let mqtt = mqtt.clone();
                 async move {

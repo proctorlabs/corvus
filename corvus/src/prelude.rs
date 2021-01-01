@@ -1,5 +1,5 @@
 pub use crate::{
-    config::*, data_structures::*, device_registry::*, mqtt::MQTTService, util::start_service, App,
+    config::*, data_structures::*, device_registry::*, mqtt::MQTTService, util::*, App,
 };
 pub use anyhow::{Context, Error, Result};
 pub use std::sync::Arc;

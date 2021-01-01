@@ -14,8 +14,9 @@ impl Trigger for OnStartTrigger {
         info!("Starting service '{}'", service.name());
         start_service(
             Duration::from_secs(2),
-            "Startup trigger".into(),
+            format!("Startup trigger for {}", service.name()),
             true,
+            false,
             move || {
                 let service = service.clone();
                 async move { service.run().await }
