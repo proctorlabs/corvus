@@ -1,7 +1,9 @@
 mod devices;
+mod hass;
 
 use crate::prelude::*;
 pub use devices::*;
+pub use hass::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Deref)]
@@ -23,7 +25,11 @@ impl DeviceRegistry {
 
     pub async fn register(&self, device: Device) -> Result<()> {
         let mut reg = self.devices.write().await;
-        reg.insert(device.id().to_string(), Arc::new(device));
+        let device = Arc::new(device);
+        let existing = reg.insert(device.id().to_string(), device.clone());
+        if existing.is_none() {
+            self.publish_device(&device).await?;
+        }
         Ok(())
     }
 

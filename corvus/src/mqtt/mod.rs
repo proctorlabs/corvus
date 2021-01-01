@@ -20,6 +20,7 @@ pub struct MQTTServiceData {
     location_topic:     String,
     discovery_topic:    String,
     cluster_topic:      String,
+    base_topic:         String,
     eventloop:          SharedMutex<EventLoop>,
     client:             AsyncClient,
     cluster:            ClusterState,
@@ -47,6 +48,7 @@ impl MQTTService {
         let availability_topic = format!("{}{}/avty", nodes_topic, location);
         let location_topic = format!("{}{}/", nodes_topic, location);
         let discovery_topic = config.discovery_topic.to_string();
+        let base_topic = config.base_topic.to_string();
         let mut mqttoptions =
             MqttOptions::new(config.client_id.clone(), config.host.clone(), config.port);
         mqttoptions.set_keep_alive(5);
@@ -60,6 +62,7 @@ impl MQTTService {
         Ok(MQTTService(Arc::new(MQTTServiceData {
             eventloop: Arc::new(Mutex::new(eventloop)),
             cluster: ClusterState::new(location.clone()),
+            base_topic,
             cluster_data,
             location,
             client,
@@ -109,37 +112,42 @@ impl MQTTService {
 
     pub fn start(&self) -> Result<()> {
         let mqtt = self.clone();
-        start_service(Duration::from_secs(2), move || {
-            let mqtt = mqtt.clone();
-            async move {
-                mqtt.client
-                    .publish(&mqtt.availability_topic, QoS::AtLeastOnce, true, "online")
-                    .await?;
-                mqtt.client
-                    .subscribe(format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
-                    .await?;
-                mqtt.client
-                    .subscribe(&mqtt.leader_topic, QoS::AtLeastOnce)
-                    .await?;
+        start_service(
+            Duration::from_secs(2),
+            "MQTT Service".into(),
+            true,
+            move || {
+                let mqtt = mqtt.clone();
+                async move {
+                    mqtt.client
+                        .publish(&mqtt.availability_topic, QoS::AtLeastOnce, true, "online")
+                        .await?;
+                    mqtt.client
+                        .subscribe(format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
+                        .await?;
+                    mqtt.client
+                        .subscribe(&mqtt.leader_topic, QoS::AtLeastOnce)
+                        .await?;
 
-                // Main loop
-                let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
-                loop {
-                    match mqtt.eventloop.lock().await.poll().await {
-                        Ok(Event::Incoming(Incoming::Publish(p))) => {
-                            mqtt.handle_message(p)
-                                .await
-                                .unwrap_or_else(|e| warn!("Error polling event: {:?}", e));
+                    // Main loop
+                    let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
+                    loop {
+                        match mqtt.eventloop.lock().await.poll().await {
+                            Ok(Event::Incoming(Incoming::Publish(p))) => {
+                                mqtt.handle_message(p)
+                                    .await
+                                    .unwrap_or_else(|e| warn!("Error polling event: {:?}", e));
+                            }
+                            Err(e) => {
+                                error!("Error received on MQTT poll: {:?}", e);
+                                interval.tick().await;
+                            }
+                            Ok(_) => (),
                         }
-                        Err(e) => {
-                            error!("Error received on MQTT poll: {:?}", e);
-                            interval.tick().await;
-                        }
-                        Ok(_) => (),
                     }
                 }
-            }
-        })?;
+            },
+        )?;
         Ok(())
     }
 
@@ -186,49 +194,17 @@ impl MQTTService {
         Ok(normalize_name(&format!("{}_{}", self.location, name)))
     }
 
-    // "icon":"mdi:account-group"}
-
     pub async fn add_device(&self, device: &Device) -> Result<()> {
-        let uniq_id = if device.cluster_wide() {
-            normalize_name(&device.id())
-        } else {
-            self.get_id(&device.id())?
-        };
-        let base_topic = if device.cluster_wide() {
-            format!("{}{}/", self.cluster_topic, uniq_id)
-        } else {
-            format!("{}{}/", self.location_topic, uniq_id)
-        };
+        let payload = device.to_discovery(self.location.to_string(), self.base_topic.to_string());
         let t = format!(
             "{}/{}/{}/{}/config",
             self.discovery_topic,
             device.device_type(),
             crate_name!(),
-            uniq_id
+            payload.unique_id.clone().unwrap_or_default()
         );
-
-        let mut mfr = HassDeviceInformation::default();
-        mfr.name = Some(self.location.to_string());
-        mfr.model = Some(crate_name!().into());
-        mfr.manufacturer = Some(crate_authors!().into());
-        mfr.sw_version = Some(crate_version!().into());
-        mfr.identifiers = Some(normalize_name(&self.location));
-
-        let mut ent = HassDiscoveryPayload::default();
-        ent.name = Some(uniq_id.to_string());
-        ent.icon = Some(device.icon().into());
-        ent.device = Some(mfr);
-        ent.unique_id = Some(uniq_id.to_string());
-        ent.base_topic = Some(base_topic);
-        ent.state_topic = Some("~stat".to_string());
-        ent.device_class = device.device_class();
-        ent.json_attributes_topic = Some("~attr".to_string());
-        ent.availability_topic = Some(self.availability_topic.to_string());
-        ent.payload_available = Some("online".into());
-        ent.payload_not_available = Some("offline".into());
-
         self.client
-            .publish(t, QoS::AtLeastOnce, true, serde_json::to_string(&ent)?)
+            .publish(t, QoS::AtLeastOnce, true, serde_json::to_string(&payload)?)
             .await?;
         Ok(())
     }

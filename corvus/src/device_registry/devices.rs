@@ -1,3 +1,4 @@
+use super::HassDiscoveryPayload;
 use crate::prelude::{constants::*, *};
 
 #[derive(Debug, Clone, Deref)]
@@ -26,6 +27,42 @@ impl Device {
             display_name,
             typ,
         }))
+    }
+
+    pub fn to_discovery(&self, location: String, base_topic: String) -> HassDiscoveryPayload {
+        let location = location.to_lowercase().replace(":", "").replace("-", "_");
+        let uniq_id = if self.cluster_wide() {
+            self.id().to_string()
+        } else {
+            format!("{}_{}", location, self.id())
+        };
+        let availability_topic = format!("{}/nodes/{}/avty", base_topic, location);
+        let base_topic = if self.cluster_wide() {
+            format!("{}/cluster/{}/", base_topic, self.id())
+        } else {
+            format!("{}/nodes/{}/{}/", base_topic, location, self.id())
+        };
+
+        let mut mfr = HassDeviceInformation::default();
+        mfr.name = Some(location);
+        mfr.model = Some(crate_name!().into());
+        mfr.manufacturer = Some(crate_authors!().into());
+        mfr.sw_version = Some(crate_version!().into());
+        mfr.identifiers = Some(uniq_id.to_string());
+
+        let mut ent = HassDiscoveryPayload::default();
+        ent.name = Some(self.display_name().into());
+        ent.icon = Some(self.icon().into());
+        ent.device = Some(mfr);
+        ent.unique_id = Some(uniq_id);
+        ent.base_topic = Some(base_topic);
+        ent.state_topic = Some("~stat".to_string());
+        ent.json_attributes_topic = Some("~attr".to_string());
+        ent.availability_topic = Some(availability_topic);
+        ent.device_class = self.device_class();
+        ent.payload_available = Some("online".into());
+        ent.payload_not_available = Some("offline".into());
+        ent
     }
 
     // We return references here, caller can clone if needed

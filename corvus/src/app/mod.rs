@@ -86,15 +86,25 @@ impl App {
         }
         drop(svcs);
         let zelf = self.clone();
-        start_service(Duration::from_secs(10), move || {
-            let zelf = zelf.clone();
-            async move { zelf.heartbeat().await }
-        })?;
+        start_service(
+            Duration::from_secs(10),
+            "Heartbeat".into(),
+            true,
+            move || {
+                let zelf = zelf.clone();
+                async move { zelf.heartbeat().await }
+            },
+        )?;
         let zelf = self.clone();
-        start_service(Duration::from_secs(120), move || {
-            let zelf = zelf.clone();
-            async move { zelf.device_registry.publish_all().await }
-        })?;
+        start_service(
+            Duration::from_secs(120),
+            "Device registration".into(),
+            false,
+            move || {
+                let zelf = zelf.clone();
+                async move { zelf.device_registry.publish_all().await }
+            },
+        )?;
         tokio::signal::ctrl_c().await?;
         warn!("Signal received, shutting down");
         Ok(())
