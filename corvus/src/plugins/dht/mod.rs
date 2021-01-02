@@ -23,11 +23,17 @@ pub struct DHTPlugin {
 }
 
 impl DHTPlugin {
-    pub fn new(name: String, mqtt: MQTTService, registry: DeviceRegistry, device: String, channel: u32) -> Self {
+    pub fn new(
+        name: String,
+        mqtt: MQTTService,
+        registry: DeviceRegistry,
+        device: String,
+        channel: u32,
+    ) -> Self {
         DHTPlugin {
             dht: DHT::new(&device, channel).unwrap(),
             temperature_device: format!("{} Temperature", name),
-            humidity_device: format!("{} Temperature", name),
+            humidity_device: format!("{} Humidity", name),
             mqtt,
             registry,
         }
@@ -40,7 +46,7 @@ impl Plugin for DHTPlugin {
         Ok(())
     }
 
-    async fn heartbeat(&self, name: String) -> Result<()> {
+    async fn heartbeat(&self, _: String) -> Result<()> {
         self.registry
             .register(self.registry.new_device(
                 self.temperature_device.to_string(),
@@ -58,7 +64,7 @@ impl Plugin for DHTPlugin {
         Ok(())
     }
 
-    async fn run(&self, name: String) -> Result<()> {
+    async fn run(&self, _: String) -> Result<()> {
         let mut zelf = self.clone();
         match Handle::current()
             .spawn_blocking(move || {
@@ -73,20 +79,14 @@ impl Plugin for DHTPlugin {
             .await?
         {
             Ok(r) => {
-                let d = self
-                    .registry
-                    .get_by_name(&self.humidity_device)
-                    .await;
+                let d = self.registry.get_by_name(&self.humidity_device).await;
                 let update = DeviceUpdate {
                     device: d,
                     value:  r.humidity.into(),
                     attr:   Default::default(),
                 };
                 self.mqtt.update_device(&update).await?;
-                let d = self
-                    .registry
-                    .get_by_name(&self.temperature_device)
-                    .await;
+                let d = self.registry.get_by_name(&self.temperature_device).await;
                 let update = DeviceUpdate {
                     device: d,
                     value:  r.temperature.into(),
