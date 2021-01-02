@@ -15,15 +15,19 @@ struct DHTPayload {
 
 #[derive(Debug, Clone)]
 pub struct DHTPlugin {
-    mqtt:     MQTTService,
-    registry: DeviceRegistry,
-    dht:      DHT,
+    mqtt:               MQTTService,
+    registry:           DeviceRegistry,
+    dht:                DHT,
+    temperature_device: String,
+    humidity_device:    String,
 }
 
 impl DHTPlugin {
-    pub fn new(mqtt: MQTTService, registry: DeviceRegistry, device: String, channel: u32) -> Self {
+    pub fn new(name: String, mqtt: MQTTService, registry: DeviceRegistry, device: String, channel: u32) -> Self {
         DHTPlugin {
             dht: DHT::new(&device, channel).unwrap(),
+            temperature_device: format!("{} Temperature", name),
+            humidity_device: format!("{} Temperature", name),
             mqtt,
             registry,
         }
@@ -39,14 +43,14 @@ impl Plugin for DHTPlugin {
     async fn heartbeat(&self, name: String) -> Result<()> {
         self.registry
             .register(self.registry.new_device(
-                format!("{} Temperature", name),
+                self.temperature_device.to_string(),
                 DeviceType::Sensor(SensorDeviceClass::Temperature),
                 false,
             ))
             .await?;
         self.registry
             .register(self.registry.new_device(
-                format!("{} Humidity", name),
+                self.humidity_device.to_string(),
                 DeviceType::Sensor(SensorDeviceClass::Humidity),
                 false,
             ))
@@ -69,7 +73,10 @@ impl Plugin for DHTPlugin {
             .await?
         {
             Ok(r) => {
-                let d = self.registry.get_name(&format!("{} Humidity", name)).await;
+                let d = self
+                    .registry
+                    .get_by_name(&self.humidity_device)
+                    .await;
                 let update = DeviceUpdate {
                     device: d,
                     value:  r.humidity.into(),
@@ -78,7 +85,7 @@ impl Plugin for DHTPlugin {
                 self.mqtt.update_device(&update).await?;
                 let d = self
                     .registry
-                    .get_name(&format!("{} Temperature", name))
+                    .get_by_name(&self.temperature_device)
                     .await;
                 let update = DeviceUpdate {
                     device: d,

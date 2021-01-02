@@ -67,7 +67,7 @@ impl Plugin for BluetoothPlugin {
                 .await?;
             let d = self
                 .registry
-                .get_name(&format!("{} Location", dev_id))
+                .get_by_name(&format!("{} Location", dev_id))
                 .await;
             let dev = DeviceUpdate {
                 attr,
@@ -96,7 +96,7 @@ impl Plugin for BluetoothPlugin {
                 r.rssi = i8::MIN;
                 let d = self
                     .registry
-                    .get_name(&format!("{} {}", name, r.mac_address))
+                    .get_by_name(&format!("{} {}", name, r.mac_address))
                     .await;
                 let dev = DeviceUpdate {
                     device: d,
@@ -158,7 +158,7 @@ impl Plugin for BluetoothPlugin {
                                 debug!("Updating RSSI for {} to {}", address, rssi);
                                 let mut r = self.readings.write().await;
                                 let reading = Reading{rssi, timestamp: Utc::now(), mac_address: address.to_string()};
-                                let d = self.registry.get_name(&format!("{} {}", name, address.to_string())).await;
+                                let d = self.registry.get_by_name(&format!("{} {}", name, address.to_string())).await;
                                 let dev = DeviceUpdate {
                                     device: d,
                                     value: rssi.into(),

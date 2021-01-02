@@ -90,9 +90,10 @@ impl Plugins {
                 service: BluetoothPlugin::new(app.device_registry.clone(), app.mqtt.clone()),
             },
             PluginOptions::DHT { device, channel } => Plugins::DHT {
-                name,
+                name: name.to_string(),
                 trigger,
                 service: DHTPlugin::new(
+                    name,
                     app.mqtt.clone(),
                     app.device_registry.clone(),
                     device.into(),

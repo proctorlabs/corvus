@@ -62,7 +62,7 @@ impl Plugin for CommandPlugin {
             .await?;
         let stdout = String::from_utf8(output.stdout).unwrap_or_default();
         let stderr = String::from_utf8(output.stderr).unwrap_or_default();
-        let d = self.registry.get_name(&name).await;
+        let d = self.registry.get_by_name(&name).await;
         let update = DeviceUpdate {
             device: d,
             value:  stdout.trim().into(),

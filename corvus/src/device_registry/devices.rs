@@ -14,7 +14,7 @@ pub struct DeviceData {
     base_topic:   String,
 }
 
-fn clean_name(s: &str) -> String {
+pub fn clean_name(s: &str) -> String {
     s.to_lowercase()
         .replace(":", "")
         .replace("-", "_")
@@ -76,7 +76,7 @@ impl Device {
         self.typ.to_string()
     }
 
-    fn uniq_id(&self) -> String {
+    pub fn uniq_id(&self) -> String {
         if self.cluster_wide() {
             self.id().into()
         } else {

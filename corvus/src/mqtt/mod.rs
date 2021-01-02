@@ -1,14 +1,11 @@
 use crate::{prelude::*, util::StaticService, MQTTConfiguration, Result};
 use async_trait::async_trait;
+use chrono::prelude::*;
 use cluster::ClusterState;
 use rumqttc::{self, AsyncClient, Event, EventLoop, Incoming, LastWill, MqttOptions, QoS};
 use std::{sync::Arc, time::Duration};
 
 mod cluster;
-
-fn normalize_name(name: &str) -> String {
-    name.replace(":", "").replace("-", "_")
-}
 
 #[derive(Clone, Deref)]
 pub struct MQTTService(Arc<MQTTServiceData>);
@@ -82,7 +79,7 @@ impl MQTTService {
         let cluster_topic = format!("{}/cluster/", config.base_topic);
         let leader_topic = format!("{}leader", cluster_topic);
         let nodes_topic = format!("{}/nodes/", config.base_topic);
-        let availability_topic = format!("{}{}/avty", nodes_topic, location);
+        let availability_topic = format!("{}{}/avty", nodes_topic, clean_name(&location));
         let discovery_topic = config.discovery_topic.to_string();
         let mut mqttoptions =
             MqttOptions::new(config.client_id.clone(), config.host.clone(), config.port);
@@ -127,7 +124,7 @@ impl MQTTService {
         let suffix_parts: Vec<&str> = suffix.split('/').collect();
         if suffix_parts.len() == 3 {
             let (node, uniq_id, typ) = (suffix_parts[0], suffix_parts[1], suffix_parts[2]);
-            let node_prefix = format!("{}_", normalize_name(node));
+            let node_prefix = format!("{}_", clean_name(node));
             let dev_id = uniq_id.trim_start_matches(&node_prefix);
             match typ {
                 "stat" => self.cluster_data.update_stat(node, dev_id, payload).await,
@@ -230,7 +227,7 @@ impl MQTTService {
             self.discovery_topic,
             device.device_type(),
             crate_name!(),
-            payload.unique_id.clone().unwrap_or_default()
+            device.uniq_id(),
         );
         self.client
             .publish(t, QoS::AtLeastOnce, true, serde_json::to_string(&payload)?)
@@ -249,12 +246,15 @@ impl MQTTService {
                 )
                 .await?;
 
+            let mut attr = d.attr.clone();
+            attr["set_by_location"] = self.location.clone().into();
+            attr["update_timestamp"] = Local::now().to_rfc3339().into();
             self.client
                 .publish(
                     device.attr_topic(),
                     QoS::AtLeastOnce,
                     false,
-                    serde_json::to_string(&d.attr)?,
+                    serde_json::to_string(&attr)?,
                 )
                 .await?;
         }

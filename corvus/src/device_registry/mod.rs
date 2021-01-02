@@ -11,10 +11,11 @@ pub struct DeviceRegistry(DeviceRegistryInner);
 
 #[derive(Clone, Debug)]
 pub struct DeviceRegistryInner {
-    devices:    Arc<RwLock<HashMap<String, Arc<Device>>>>,
-    mqtt:       MQTTService,
-    location:   String,
-    base_topic: String,
+    devices_names: Arc<RwLock<HashMap<String, Arc<Device>>>>,
+    devices_ids:   Arc<RwLock<HashMap<String, Arc<Device>>>>,
+    mqtt:          MQTTService,
+    location:      String,
+    base_topic:    String,
 }
 
 #[async_trait]
@@ -32,7 +33,8 @@ impl StaticService for DeviceRegistry {
 impl DeviceRegistry {
     pub fn new(mqtt: MQTTService, config: Arc<Configuration>) -> Self {
         Self(DeviceRegistryInner {
-            devices: Default::default(),
+            devices_ids: Default::default(),
+            devices_names: Default::default(),
             location: config.node.location.to_string(),
             base_topic: config.mqtt.base_topic.to_string(),
             mqtt,
@@ -49,16 +51,28 @@ impl DeviceRegistry {
         )
     }
 
-    pub async fn get_name(&self, key: &str) -> Option<Arc<Device>> {
-        let reg = self.devices.read().await;
+    pub async fn get_by_name(&self, key: &str) -> Option<Arc<Device>> {
+        let reg = self.devices_names.read().await;
+        let d = reg.get(key).cloned();
+        d
+    }
+
+    pub async fn get_by_id(&self, key: &str) -> Option<Arc<Device>> {
+        let reg = self.devices_names.read().await;
         let d = reg.get(key).cloned();
         d
     }
 
     pub async fn register(&self, device: Device) -> Result<()> {
-        let mut reg = self.devices.write().await;
         let device = Arc::new(device);
-        let existing = reg.insert(device.display_name().to_string(), device.clone());
+
+        let mut reg = self.devices_names.write().await;
+        reg.insert(device.display_name().to_string(), device.clone());
+        drop(reg);
+        let mut reg = self.devices_ids.write().await;
+        let existing = reg.insert(device.id().to_string(), device.clone());
+        drop(reg);
+
         if existing.is_none() {
             self.publish_device(&device).await?;
         }
@@ -66,7 +80,7 @@ impl DeviceRegistry {
     }
 
     pub async fn list_devices(&self) -> Result<Vec<Arc<Device>>> {
-        let reg = self.devices.read().await;
+        let reg = self.devices_names.read().await;
         Ok(reg.values().cloned().collect())
     }
 
