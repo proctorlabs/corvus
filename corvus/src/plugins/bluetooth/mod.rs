@@ -59,18 +59,20 @@ impl Plugin for BluetoothPlugin {
                 loc = "none".into();
             }
             self.registry
-                .register(Device::new(
-                    format!("{}_location", dev_id),
+                .register(self.registry.new_device(
+                    format!("{} Location", dev_id),
                     DeviceType::Sensor(SensorDeviceClass::None),
                     true,
                 ))
                 .await?;
-
+            let d = self
+                .registry
+                .get_name(&format!("{} Location", dev_id))
+                .await;
             let dev = DeviceUpdate {
                 attr,
-                name: format!("{}_location", dev_id),
+                device: d,
                 value: loc.into(),
-                is_cluster_device: true,
             };
             self.mqtt.update_device(&dev).await?;
         }
@@ -83,8 +85,8 @@ impl Plugin for BluetoothPlugin {
         let readings = self.readings.read().await;
         for (mac, reading) in readings.iter() {
             self.registry
-                .register(Device::new(
-                    format!("{}_{}", name, mac),
+                .register(self.registry.new_device(
+                    format!("{} {}", name, mac),
                     DeviceType::Sensor(SensorDeviceClass::SignalStrength),
                     false,
                 ))
@@ -92,11 +94,14 @@ impl Plugin for BluetoothPlugin {
             if n.signed_duration_since(reading.timestamp).num_seconds() > 60 {
                 let mut r = reading.clone();
                 r.rssi = i8::MIN;
+                let d = self
+                    .registry
+                    .get_name(&format!("{} {}", name, r.mac_address))
+                    .await;
                 let dev = DeviceUpdate {
-                    name:              format!("{}_{}", name, r.mac_address),
-                    value:             r.rssi.into(),
-                    attr:              Document::new(&r)?,
-                    is_cluster_device: false,
+                    device: d,
+                    value:  r.rssi.into(),
+                    attr:   Document::new(&r)?,
                 };
                 self.mqtt.update_device(&dev).await?;
             }
@@ -153,11 +158,11 @@ impl Plugin for BluetoothPlugin {
                                 debug!("Updating RSSI for {} to {}", address, rssi);
                                 let mut r = self.readings.write().await;
                                 let reading = Reading{rssi, timestamp: Utc::now(), mac_address: address.to_string()};
+                                let d = self.registry.get_name(&format!("{} {}", name, address.to_string())).await;
                                 let dev = DeviceUpdate {
-                                    name:  format!("{}_{}", name, address.to_string()),
+                                    device: d,
                                     value: rssi.into(),
                                     attr:  Document::new(&reading)?,
-                                    is_cluster_device: false,
                                 };
                                 self.mqtt.update_device(&dev).await?;
                                 r.insert(address.to_string(), reading);

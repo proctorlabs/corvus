@@ -18,10 +18,7 @@ pub struct MQTTServiceData {
     availability_topic: String,
     nodes_topic:        String,
     leader_topic:       String,
-    location_topic:     String,
     discovery_topic:    String,
-    cluster_topic:      String,
-    base_topic:         String,
     eventloop:          SharedMutex<EventLoop>,
     client:             AsyncClient,
     cluster:            ClusterState,
@@ -86,9 +83,7 @@ impl MQTTService {
         let leader_topic = format!("{}leader", cluster_topic);
         let nodes_topic = format!("{}/nodes/", config.base_topic);
         let availability_topic = format!("{}{}/avty", nodes_topic, location);
-        let location_topic = format!("{}{}/", nodes_topic, location);
         let discovery_topic = config.discovery_topic.to_string();
-        let base_topic = config.base_topic.to_string();
         let mut mqttoptions =
             MqttOptions::new(config.client_id.clone(), config.host.clone(), config.port);
         mqttoptions.set_keep_alive(5);
@@ -102,7 +97,6 @@ impl MQTTService {
         Ok(MQTTService(Arc::new(MQTTServiceData {
             eventloop: Arc::new(Mutex::new(eventloop)),
             cluster: ClusterState::new(location.clone()),
-            base_topic,
             cluster_data,
             location,
             client,
@@ -110,8 +104,6 @@ impl MQTTService {
             nodes_topic,
             availability_topic,
             leader_topic,
-            location_topic,
-            cluster_topic,
         })))
     }
 
@@ -231,12 +223,8 @@ impl MQTTService {
         Ok(())
     }
 
-    fn get_id(&self, name: &str) -> Result<String> {
-        Ok(normalize_name(&format!("{}_{}", self.location, name)))
-    }
-
     pub async fn add_device(&self, device: &Device) -> Result<()> {
-        let payload = device.to_discovery(self.location.to_string(), self.base_topic.to_string());
+        let payload = device.to_discovery();
         let t = format!(
             "{}/{}/{}/{}/config",
             self.discovery_topic,
@@ -251,24 +239,25 @@ impl MQTTService {
     }
 
     pub async fn update_device(&self, d: &DeviceUpdate) -> Result<()> {
-        let loc_t = if d.is_cluster_device {
-            format!("{}{}/", self.cluster_topic, normalize_name(&d.name))
-        } else {
-            format!("{}{}/", self.location_topic, self.get_id(&d.name)?)
-        };
-        let stat_t = format!("{}stat", loc_t);
-        self.client
-            .publish(stat_t, QoS::AtLeastOnce, false, d.value.to_string())
-            .await?;
+        if let Some(device) = &d.device {
+            self.client
+                .publish(
+                    device.stat_topic(),
+                    QoS::AtLeastOnce,
+                    false,
+                    d.value.to_string(),
+                )
+                .await?;
 
-        self.client
-            .publish(
-                format!("{}attr", loc_t),
-                QoS::AtLeastOnce,
-                false,
-                serde_json::to_string(&d.attr)?,
-            )
-            .await?;
+            self.client
+                .publish(
+                    device.attr_topic(),
+                    QoS::AtLeastOnce,
+                    false,
+                    serde_json::to_string(&d.attr)?,
+                )
+                .await?;
+        }
         Ok(())
     }
 }

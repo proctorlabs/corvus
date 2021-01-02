@@ -10,63 +10,60 @@ pub struct DeviceData {
     display_name: String,
     typ:          DeviceType,
     cluster_wide: bool,
+    location:     String,
+    base_topic:   String,
+}
+
+fn clean_name(s: &str) -> String {
+    s.to_lowercase()
+        .replace(":", "")
+        .replace("-", "_")
+        .replace(" ", "_")
 }
 
 impl Device {
-    fn make_id(display_name: &str) -> String {
-        display_name
-            .to_lowercase()
-            .replace(":", "")
-            .replace("-", "_")
-    }
-
-    pub fn new(display_name: String, typ: DeviceType, cluster_wide: bool) -> Self {
+    pub fn new(
+        display_name: String,
+        typ: DeviceType,
+        cluster_wide: bool,
+        location: String,
+        base_topic: String,
+    ) -> Self {
         Device(Arc::new(DeviceData {
-            id: Device::make_id(&display_name),
+            id: clean_name(&display_name),
             cluster_wide,
             display_name,
             typ,
+            location,
+            base_topic,
         }))
     }
 
     #[allow(clippy::field_reassign_with_default)]
-    pub fn to_discovery(&self, location: String, base_topic: String) -> HassDiscoveryPayload {
-        let location = location.to_lowercase().replace(":", "").replace("-", "_");
-        let uniq_id = if self.cluster_wide() {
-            self.id().to_string()
-        } else {
-            format!("{}_{}", location, self.id())
-        };
-        let availability_topic = format!("{}/nodes/{}/avty", base_topic, location);
-        let base_topic = if self.cluster_wide() {
-            format!("{}/cluster/{}/", base_topic, self.id())
-        } else {
-            format!("{}/nodes/{}/{}/", base_topic, location, self.id())
-        };
-
+    pub fn to_discovery(&self) -> HassDiscoveryPayload {
         let mut mfr = HassDeviceInformation::default();
-        mfr.name = Some(location);
+        mfr.name = Some(self.location.to_string());
         mfr.model = Some(crate_name!().into());
         mfr.manufacturer = Some(crate_authors!().into());
         mfr.sw_version = Some(crate_version!().into());
-        mfr.identifiers = Some(uniq_id.to_string());
+        mfr.identifiers = Some(self.uniq_id());
 
         let mut ent = HassDiscoveryPayload::default();
+        ent.device = Some(mfr);
         ent.name = Some(self.display_name().into());
         ent.icon = Some(self.icon().into());
-        ent.device = Some(mfr);
-        ent.unique_id = Some(uniq_id);
-        ent.base_topic = Some(base_topic);
+        ent.unique_id = Some(self.uniq_id());
+        ent.base_topic = Some(self.device_base());
+        ent.availability_topic = Some(self.avty_topic());
+        ent.device_class = self.device_class();
         ent.state_topic = Some("~stat".to_string());
         ent.json_attributes_topic = Some("~attr".to_string());
-        ent.availability_topic = Some(availability_topic);
-        ent.device_class = self.device_class();
         ent.payload_available = Some("online".into());
         ent.payload_not_available = Some("offline".into());
         ent
     }
 
-    // We return references here, caller can clone if needed
+    // We return references here when possible, caller can clone if needed
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -79,8 +76,46 @@ impl Device {
         self.typ.to_string()
     }
 
+    fn uniq_id(&self) -> String {
+        if self.cluster_wide() {
+            self.id().into()
+        } else {
+            format!("{}_{}", clean_name(&self.location), self.id())
+        }
+    }
+
+    fn node_base(&self) -> String {
+        if self.cluster_wide() {
+            format!("{}/cluster/", self.base_topic)
+        } else {
+            format!("{}/nodes/{}/", self.base_topic, clean_name(&self.location))
+        }
+    }
+
+    fn device_base(&self) -> String {
+        format!("{}{}/", self.node_base(), self.uniq_id())
+    }
+
+    pub fn avty_topic(&self) -> String {
+        format!("{}avty", self.node_base())
+    }
+
+    pub fn stat_topic(&self) -> String {
+        format!("{}stat", self.device_base())
+    }
+
+    pub fn attr_topic(&self) -> String {
+        format!("{}attr", self.device_base())
+    }
+
     pub fn device_class(&self) -> Option<String> {
-        None
+        match &self.typ {
+            DeviceType::Sensor(SensorDeviceClass::None)
+            | DeviceType::BinarySensor(BinarySensorDeviceClass::None) => None,
+            DeviceType::Sensor(dc) => Some(dc.to_string()),
+            DeviceType::BinarySensor(dc) => Some(dc.to_string()),
+            _ => None,
+        }
     }
 
     pub fn icon(&self) -> &'static str {
@@ -267,8 +302,7 @@ impl BinarySensorDeviceClass {
 
 #[derive(Debug, Clone)]
 pub struct DeviceUpdate {
-    pub name:              String,
-    pub value:             Document,
-    pub attr:              Document,
-    pub is_cluster_device: bool,
+    pub device: Option<Arc<Device>>,
+    pub value:  Document,
+    pub attr:   Document,
 }

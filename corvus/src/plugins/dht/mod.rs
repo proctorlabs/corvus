@@ -23,9 +23,9 @@ pub struct DHTPlugin {
 impl DHTPlugin {
     pub fn new(mqtt: MQTTService, registry: DeviceRegistry, device: String, channel: u32) -> Self {
         DHTPlugin {
+            dht: DHT::new(&device, channel).unwrap(),
             mqtt,
             registry,
-            dht: DHT::new(&device, channel).unwrap(),
         }
     }
 }
@@ -38,15 +38,15 @@ impl Plugin for DHTPlugin {
 
     async fn heartbeat(&self, name: String) -> Result<()> {
         self.registry
-            .register(Device::new(
-                format!("{}_temperature", name),
+            .register(self.registry.new_device(
+                format!("{} Temperature", name),
                 DeviceType::Sensor(SensorDeviceClass::Temperature),
                 false,
             ))
             .await?;
         self.registry
-            .register(Device::new(
-                format!("{}_humidity", name),
+            .register(self.registry.new_device(
+                format!("{} Humidity", name),
                 DeviceType::Sensor(SensorDeviceClass::Humidity),
                 false,
             ))
@@ -69,18 +69,21 @@ impl Plugin for DHTPlugin {
             .await?
         {
             Ok(r) => {
+                let d = self.registry.get_name(&format!("{} Humidity", name)).await;
                 let update = DeviceUpdate {
-                    name:              format!("{}_humidity", name),
-                    value:             r.humidity.into(),
-                    attr:              Default::default(),
-                    is_cluster_device: false,
+                    device: d,
+                    value:  r.humidity.into(),
+                    attr:   Default::default(),
                 };
                 self.mqtt.update_device(&update).await?;
+                let d = self
+                    .registry
+                    .get_name(&format!("{} Temperature", name))
+                    .await;
                 let update = DeviceUpdate {
-                    name:              format!("{}_temperature", name),
-                    value:             r.temperature.into(),
-                    attr:              Default::default(),
-                    is_cluster_device: false,
+                    device: d,
+                    value:  r.temperature.into(),
+                    attr:   Default::default(),
                 };
                 self.mqtt.update_device(&update).await?;
             }

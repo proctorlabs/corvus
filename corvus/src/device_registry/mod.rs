@@ -11,8 +11,10 @@ pub struct DeviceRegistry(DeviceRegistryInner);
 
 #[derive(Clone, Debug)]
 pub struct DeviceRegistryInner {
-    devices: Arc<RwLock<HashMap<String, Arc<Device>>>>,
-    mqtt:    MQTTService,
+    devices:    Arc<RwLock<HashMap<String, Arc<Device>>>>,
+    mqtt:       MQTTService,
+    location:   String,
+    base_topic: String,
 }
 
 #[async_trait]
@@ -28,17 +30,35 @@ impl StaticService for DeviceRegistry {
 }
 
 impl DeviceRegistry {
-    pub fn new(mqtt: MQTTService) -> Self {
+    pub fn new(mqtt: MQTTService, config: Arc<Configuration>) -> Self {
         Self(DeviceRegistryInner {
             devices: Default::default(),
+            location: config.node.location.to_string(),
+            base_topic: config.mqtt.base_topic.to_string(),
             mqtt,
         })
+    }
+
+    pub fn new_device(&self, display_name: String, typ: DeviceType, cluster_wide: bool) -> Device {
+        Device::new(
+            display_name,
+            typ,
+            cluster_wide,
+            self.location.to_string(),
+            self.base_topic.to_string(),
+        )
+    }
+
+    pub async fn get_name(&self, key: &str) -> Option<Arc<Device>> {
+        let reg = self.devices.read().await;
+        let d = reg.get(key).cloned();
+        d
     }
 
     pub async fn register(&self, device: Device) -> Result<()> {
         let mut reg = self.devices.write().await;
         let device = Arc::new(device);
-        let existing = reg.insert(device.id().to_string(), device.clone());
+        let existing = reg.insert(device.display_name().to_string(), device.clone());
         if existing.is_none() {
             self.publish_device(&device).await?;
         }

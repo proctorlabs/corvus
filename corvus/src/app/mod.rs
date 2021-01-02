@@ -53,7 +53,7 @@ impl App {
             .await?;
             Ok(App(Arc::new(AppServices {
                 plugins: Default::default(),
-                device_registry: DeviceRegistry::new(mqtt_service.clone()),
+                device_registry: DeviceRegistry::new(mqtt_service.clone(), config.clone()),
                 mqtt: mqtt_service,
                 cluster_data,
                 config,
