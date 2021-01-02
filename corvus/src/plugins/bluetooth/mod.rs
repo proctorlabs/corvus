@@ -59,11 +59,15 @@ impl Plugin for BluetoothPlugin {
                 loc = "none".into();
             }
             self.registry
-                .register(self.registry.new_device(
-                    format!("{} Location", dev_id),
-                    DeviceType::Sensor(SensorDeviceClass::None),
-                    true,
-                ))
+                .register(
+                    self.registry
+                        .new_device(
+                            format!("{} Location", dev_id),
+                            DeviceType::Sensor(SensorDeviceClass::None),
+                        )
+                        .into_cluster_device()
+                        .build(),
+                )
                 .await?;
             let d = self
                 .registry
@@ -85,11 +89,14 @@ impl Plugin for BluetoothPlugin {
         let readings = self.readings.read().await;
         for (mac, reading) in readings.iter() {
             self.registry
-                .register(self.registry.new_device(
-                    format!("{} {}", name, mac),
-                    DeviceType::Sensor(SensorDeviceClass::SignalStrength),
-                    false,
-                ))
+                .register(
+                    self.registry
+                        .new_device(
+                            format!("{} {}", name, mac),
+                            DeviceType::Sensor(SensorDeviceClass::SignalStrength),
+                        )
+                        .build(),
+                )
                 .await?;
             if n.signed_duration_since(reading.timestamp).num_seconds() > 60 {
                 let mut r = reading.clone();

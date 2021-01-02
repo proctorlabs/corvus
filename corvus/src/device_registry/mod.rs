@@ -41,11 +41,10 @@ impl DeviceRegistry {
         })
     }
 
-    pub fn new_device(&self, display_name: String, typ: DeviceType, cluster_wide: bool) -> Device {
-        Device::new(
+    pub fn new_device(&self, display_name: String, typ: DeviceType) -> DeviceData {
+        DeviceData::new(
             display_name,
             typ,
-            cluster_wide,
             self.location.to_string(),
             self.base_topic.to_string(),
         )

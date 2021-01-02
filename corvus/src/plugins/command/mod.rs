@@ -44,11 +44,11 @@ impl Plugin for CommandPlugin {
 
     async fn heartbeat(&self, name: String) -> Result<()> {
         self.registry
-            .register(self.registry.new_device(
-                name,
-                DeviceType::Sensor(SensorDeviceClass::None),
-                false,
-            ))
+            .register(
+                self.registry
+                    .new_device(name, DeviceType::Sensor(SensorDeviceClass::None))
+                    .build(),
+            )
             .await
     }
 

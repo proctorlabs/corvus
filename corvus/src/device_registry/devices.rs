@@ -6,12 +6,13 @@ pub struct Device(Arc<DeviceData>);
 
 #[derive(Debug)]
 pub struct DeviceData {
-    id:           String,
-    display_name: String,
-    typ:          DeviceType,
-    cluster_wide: bool,
-    location:     String,
-    base_topic:   String,
+    id:                  String,
+    display_name:        String,
+    typ:                 DeviceType,
+    cluster_wide:        bool,
+    location:            String,
+    base_topic:          String,
+    unit_of_measurement: Option<String>,
 }
 
 pub fn clean_name(s: &str) -> String {
@@ -21,24 +22,40 @@ pub fn clean_name(s: &str) -> String {
         .replace(" ", "_")
 }
 
-impl Device {
+impl DeviceData {
     pub fn new(
         display_name: String,
         typ: DeviceType,
-        cluster_wide: bool,
         location: String,
         base_topic: String,
     ) -> Self {
-        Device(Arc::new(DeviceData {
+        Self {
             id: clean_name(&display_name),
-            cluster_wide,
+            unit_of_measurement: None,
+            cluster_wide: false,
             display_name,
             typ,
             location,
             base_topic,
-        }))
+        }
     }
 
+    pub fn with_unit_of_measurement(mut self, unit: String) -> Self {
+        self.unit_of_measurement = Some(unit);
+        self
+    }
+
+    pub fn into_cluster_device(mut self) -> Self {
+        self.cluster_wide = true;
+        self
+    }
+
+    pub fn build(self) -> Device {
+        Device(Arc::new(self))
+    }
+}
+
+impl Device {
     #[allow(clippy::field_reassign_with_default)]
     pub fn to_discovery(&self) -> HassDiscoveryPayload {
         let mut mfr = HassDeviceInformation::default();
@@ -60,6 +77,7 @@ impl Device {
         ent.json_attributes_topic = Some("~attr".to_string());
         ent.payload_available = Some("online".into());
         ent.payload_not_available = Some("offline".into());
+        ent.unit_of_measurement = self.unit_of_measurement.clone();
         ent
     }
 
