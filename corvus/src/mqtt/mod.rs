@@ -16,10 +16,10 @@ pub struct MQTTServiceData {
     nodes_topic:        String,
     leader_topic:       String,
     discovery_topic:    String,
-    eventloop:          SharedMutex<EventLoop>,
-    client:             AsyncClient,
+    client:             SharedMutex<Option<AsyncClient>>,
     cluster:            ClusterState,
     cluster_data:       ClusterNodes,
+    mqtt_options:       MqttOptions,
 }
 
 impl std::fmt::Debug for MQTTService {
@@ -39,22 +39,17 @@ impl StaticService for MQTTService {
     const DURATION: Duration = Duration::from_secs(10);
 
     async fn exec_service(zelf: Self) -> Result<()> {
-        // zelf.poll_leader().await
         let mqtt = zelf.clone();
-        mqtt.client
-            .publish(&mqtt.availability_topic, QoS::AtLeastOnce, true, "online")
+        let mut eventloop = mqtt.connect().await?;
+        mqtt.publish(&mqtt.availability_topic, "online", true, QoS::AtLeastOnce)
             .await?;
-        mqtt.client
-            .subscribe(format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
+        mqtt.subscribe(&format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
             .await?;
-        mqtt.client
-            .subscribe(&mqtt.leader_topic, QoS::AtLeastOnce)
-            .await?;
+        mqtt.subscribe(&mqtt.leader_topic, QoS::AtLeastOnce).await?;
 
         // Main loop
-        let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
         loop {
-            match mqtt.eventloop.lock().await.poll().await {
+            match eventloop.poll().await {
                 Ok(Event::Incoming(Incoming::Publish(p))) => {
                     mqtt.handle_message(p)
                         .await
@@ -62,7 +57,7 @@ impl StaticService for MQTTService {
                 }
                 Err(e) => {
                     error!("Error received on MQTT poll: {:?}", e);
-                    interval.tick().await;
+                    return mqtt.disconnect().await;
                 }
                 Ok(_) => (),
             }
@@ -81,27 +76,42 @@ impl MQTTService {
         let nodes_topic = format!("{}/nodes/", config.base_topic);
         let availability_topic = format!("{}{}/avty", nodes_topic, clean_name(&location));
         let discovery_topic = config.discovery_topic.to_string();
-        let mut mqttoptions =
+        let mut mqtt_options =
             MqttOptions::new(config.client_id.clone(), config.host.clone(), config.port);
-        mqttoptions.set_keep_alive(5);
-        mqttoptions.set_last_will(LastWill::new(
+        mqtt_options.set_keep_alive(5);
+        mqtt_options.set_last_will(LastWill::new(
             &availability_topic,
             QoS::AtLeastOnce,
             "offline",
         ));
-        let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
 
         Ok(MQTTService(Arc::new(MQTTServiceData {
-            eventloop: Arc::new(Mutex::new(eventloop)),
             cluster: ClusterState::new(location.clone()),
+            client: Arc::new(Mutex::new(None)),
             cluster_data,
             location,
-            client,
             discovery_topic,
             nodes_topic,
             availability_topic,
             leader_topic,
+            mqtt_options,
         })))
+    }
+
+    pub async fn connect(&self) -> Result<EventLoop> {
+        info!("Connecting to MQTT broker");
+        let (client, eventloop) = AsyncClient::new(self.mqtt_options.clone(), 10);
+        let mut cli_lock = self.client.lock().await;
+        *cli_lock = Some(client);
+        info!("MQTT connected");
+        Ok(eventloop)
+    }
+
+    pub async fn disconnect(&self) -> Result<()> {
+        warn!("MQTT Disconnected");
+        let mut cli_lock = self.client.lock().await;
+        *cli_lock = None;
+        Ok(())
     }
 
     async fn handle_message(&self, p: rumqttc::Publish) -> Result<()> {
@@ -139,48 +149,6 @@ impl MQTTService {
         Ok(())
     }
 
-    pub fn start(&self) -> Result<()> {
-        let mqtt = self.clone();
-        start_service(
-            Duration::from_secs(2),
-            "MQTT Service".into(),
-            true,
-            false,
-            move || {
-                let mqtt = mqtt.clone();
-                async move {
-                    mqtt.client
-                        .publish(&mqtt.availability_topic, QoS::AtLeastOnce, true, "online")
-                        .await?;
-                    mqtt.client
-                        .subscribe(format!("{}#", mqtt.nodes_topic), QoS::AtLeastOnce)
-                        .await?;
-                    mqtt.client
-                        .subscribe(&mqtt.leader_topic, QoS::AtLeastOnce)
-                        .await?;
-
-                    // Main loop
-                    let mut interval = tokio::time::interval(std::time::Duration::new(1, 0));
-                    loop {
-                        match mqtt.eventloop.lock().await.poll().await {
-                            Ok(Event::Incoming(Incoming::Publish(p))) => {
-                                mqtt.handle_message(p)
-                                    .await
-                                    .unwrap_or_else(|e| warn!("Error polling event: {:?}", e));
-                            }
-                            Err(e) => {
-                                error!("Error received on MQTT poll: {:?}", e);
-                                interval.tick().await;
-                            }
-                            Ok(_) => (),
-                        }
-                    }
-                }
-            },
-        )?;
-        Ok(())
-    }
-
     pub async fn heartbeat(&self) -> Result<()> {
         self.poll_leader().await
     }
@@ -208,15 +176,34 @@ impl MQTTService {
         }
     }
 
+    pub async fn publish(&self, topic: &str, message: &str, retain: bool, qos: QoS) -> Result<()> {
+        match self.client.lock().await.as_ref() {
+            Some(c) => {
+                c.publish(topic, qos, retain, message).await?;
+                Ok(())
+            }
+            None => Err(anyhow!("Not connected!")),
+        }
+    }
+
+    pub async fn subscribe(&self, topic: &str, qos: QoS) -> Result<()> {
+        match self.client.lock().await.as_ref() {
+            Some(c) => {
+                c.subscribe(topic, qos).await?;
+                Ok(())
+            }
+            None => Err(anyhow!("Not connected!")),
+        }
+    }
+
     async fn declare_leadership(&self) -> Result<()> {
-        self.client
-            .publish(
-                &self.leader_topic,
-                QoS::AtLeastOnce,
-                true,
-                self.cluster.get_sid().await?,
-            )
-            .await?;
+        self.publish(
+            &self.leader_topic,
+            &self.cluster.get_sid().await?,
+            true,
+            QoS::AtLeastOnce,
+        )
+        .await?;
         Ok(())
     }
 
@@ -229,34 +216,36 @@ impl MQTTService {
             crate_name!(),
             device.uniq_id(),
         );
-        self.client
-            .publish(t, QoS::AtLeastOnce, true, serde_json::to_string(&payload)?)
-            .await?;
+        self.publish(
+            &t,
+            &serde_json::to_string(&payload)?,
+            true,
+            QoS::AtLeastOnce,
+        )
+        .await?;
         Ok(())
     }
 
     pub async fn update_device(&self, d: &DeviceUpdate) -> Result<()> {
         if let Some(device) = &d.device {
-            self.client
-                .publish(
-                    device.stat_topic(),
-                    QoS::AtLeastOnce,
-                    false,
-                    d.value.to_string(),
-                )
-                .await?;
+            self.publish(
+                &device.stat_topic(),
+                &d.value.to_string(),
+                false,
+                QoS::AtLeastOnce,
+            )
+            .await?;
 
             let mut attr = d.attr.clone();
             attr["set_by_location"] = self.location.clone().into();
             attr["update_timestamp"] = Local::now().to_rfc3339().into();
-            self.client
-                .publish(
-                    device.attr_topic(),
-                    QoS::AtLeastOnce,
-                    false,
-                    serde_json::to_string(&attr)?,
-                )
-                .await?;
+            self.publish(
+                &device.attr_topic(),
+                &serde_json::to_string(&attr)?,
+                false,
+                QoS::AtLeastOnce,
+            )
+            .await?;
         }
         Ok(())
     }

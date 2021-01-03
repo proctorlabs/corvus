@@ -7,8 +7,8 @@ use tokio::time::sleep;
 #[derive(Clone)]
 pub struct ServiceData<T, F>
 where
-    T: Clone + Send + Sync + Fn() -> F + Send + Sync + 'static,
-    F: Clone + Send + Sync + std::future::Future<Output = Result<()>> + Sync + Send,
+    T: Clone + Send + Sync + Fn() -> F,
+    F: 'static + Clone + Send + std::future::Future<Output = Result<()>>,
 {
     pub name:              String,
     pub start_immediately: bool,
@@ -29,8 +29,8 @@ pub trait StaticService: Send + Sync + Clone {
 #[async_trait]
 impl<T, F> Service for ServiceData<T, F>
 where
-    T: Clone + Send + Sync + Fn() -> F + Send + Sync + 'static,
-    F: Clone + Send + Sync + std::future::Future<Output = Result<()>> + Sync + Send,
+    T: Clone + Send + Sync + Fn() -> F,
+    F: 'static + Clone + Send + std::future::Future<Output = Result<()>>,
 {
     fn name(&self) -> &str {
         &self.name
@@ -116,10 +116,10 @@ where
     F: std::future::Future<Output = Result<()>> + Send,
 {
     tokio::spawn(async move {
+        info!("Starting service {}", name);
         if !immediate {
             sleep(dur).await;
         }
-        info!("Starting service {}", name);
         loop {
             let dur = if jitter {
                 dur + Duration::from_millis(rand::thread_rng().gen_range(0..2000))

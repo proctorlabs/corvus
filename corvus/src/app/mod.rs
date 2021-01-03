@@ -66,7 +66,7 @@ impl App {
         start_service(
             Duration::from_secs(10),
             "MQTT Heartbeat".into(),
-            true,
+            false,
             true,
             move || {
                 let zelf = zelf.clone();
@@ -80,7 +80,7 @@ impl App {
             start_service(
                 Duration::from_secs(10),
                 format!("{} Plugin Heartbeat", svc.name()),
-                true,
+                false,
                 false,
                 move || {
                     let svc = svc.clone();
