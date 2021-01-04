@@ -1,5 +1,5 @@
 pub use crate::prelude::*;
-use crate::{mqtt::MQTTService, plugins::Plugins};
+use crate::{mqtt::MQTTService, plugins::PluginManager};
 use std::time::Duration;
 
 mod args;
@@ -11,7 +11,7 @@ pub struct App(Arc<AppServices>);
 pub struct AppServices {
     pub config:          Arc<Configuration>,
     pub mqtt:            MQTTService,
-    pub plugins:         Mutex<Vec<Plugins>>,
+    pub plugin_manager:  PluginManager,
     pub cluster_data:    ClusterNodes,
     pub device_registry: DeviceRegistry,
 }
@@ -45,15 +45,16 @@ impl App {
             info!("Starting Corvus");
             let config = Configuration::load(opts.config)?;
             let cluster_data = ClusterNodes::default();
+            let plugin_manager: PluginManager = Default::default();
             let mqtt_service = MQTTService::new(
                 config.node.location.clone(),
                 config.mqtt.clone(),
-                cluster_data.clone(),
+                plugin_manager.clone(),
             )
             .await?;
             Ok(App(Arc::new(AppServices {
-                plugins: Default::default(),
                 device_registry: DeviceRegistry::new(mqtt_service.clone(), config.clone()),
+                plugin_manager,
                 mqtt: mqtt_service,
                 cluster_data,
                 config,
@@ -74,7 +75,7 @@ impl App {
             },
         )?;
 
-        for svc in &*self.plugins.lock().await {
+        for svc in self.plugin_manager.lock().await.values().cloned() {
             let svc = svc.clone();
             let zelf = self.clone();
             start_service(
@@ -99,13 +100,7 @@ impl App {
     }
 
     async fn init_plugins(&self) -> Result<()> {
-        let mut svcs = self.plugins.lock().await;
-        for svc in self.config.plugins.iter() {
-            let s = Plugins::new(svc.clone(), self.clone());
-            s.start()?;
-            svcs.insert(0, s);
-        }
-        Ok(())
+        self.plugin_manager.init_plugins(&self.config, self).await
     }
 
     async fn init_mqtt(&self) -> Result<()> {

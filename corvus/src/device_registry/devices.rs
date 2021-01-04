@@ -11,6 +11,7 @@ pub struct DeviceData {
     typ:                 DeviceType,
     cluster_wide:        bool,
     location:            String,
+    plugin:              String,
     base_topic:          String,
     unit_of_measurement: Option<String>,
 }
@@ -28,11 +29,13 @@ impl DeviceData {
         typ: DeviceType,
         location: String,
         base_topic: String,
+        plugin: String,
     ) -> Self {
         Self {
             id: clean_name(&display_name),
             unit_of_measurement: None,
             cluster_wide: false,
+            plugin,
             display_name,
             typ,
             location,
@@ -71,13 +74,17 @@ impl Device {
         ent.icon = Some(self.icon().into());
         ent.unique_id = Some(self.uniq_id());
         ent.base_topic = Some(self.device_base());
-        ent.availability_topic = Some(self.avty_topic());
         ent.device_class = self.device_class();
         ent.state_topic = Some("~stat".to_string());
         ent.json_attributes_topic = Some("~attr".to_string());
         ent.payload_available = Some("online".into());
         ent.payload_not_available = Some("offline".into());
         ent.unit_of_measurement = self.unit_of_measurement.clone();
+
+        if !self.cluster_wide() {
+            ent.availability_topic = Some(self.avty_topic());
+        }
+
         ent
     }
 
@@ -88,6 +95,10 @@ impl Device {
 
     pub fn display_name(&self) -> &str {
         &self.display_name
+    }
+
+    pub fn plugin(&self) -> &str {
+        &self.plugin
     }
 
     pub fn device_type(&self) -> String {
@@ -320,7 +331,7 @@ impl BinarySensorDeviceClass {
 
 #[derive(Debug, Clone)]
 pub struct DeviceUpdate {
-    pub device: Option<Arc<Device>>,
+    pub device: Option<Device>,
     pub value:  Document,
     pub attr:   Document,
 }

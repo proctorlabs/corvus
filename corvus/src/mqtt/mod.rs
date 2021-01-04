@@ -1,4 +1,4 @@
-use crate::{prelude::*, util::StaticService, MQTTConfiguration, Result};
+use crate::{plugins::PluginManager, prelude::*, util::StaticService, MQTTConfiguration, Result};
 use async_trait::async_trait;
 use chrono::prelude::*;
 use cluster::ClusterState;
@@ -18,8 +18,8 @@ pub struct MQTTServiceData {
     discovery_topic:    String,
     client:             SharedMutex<Option<AsyncClient>>,
     cluster:            ClusterState,
-    cluster_data:       ClusterNodes,
     mqtt_options:       MqttOptions,
+    plugin_manager:     PluginManager,
 }
 
 impl std::fmt::Debug for MQTTService {
@@ -69,7 +69,7 @@ impl MQTTService {
     pub async fn new(
         location: String,
         config: Arc<MQTTConfiguration>,
-        cluster_data: ClusterNodes,
+        plugin_manager: PluginManager,
     ) -> Result<Self> {
         let cluster_topic = format!("{}/cluster/", config.base_topic);
         let leader_topic = format!("{}leader", cluster_topic);
@@ -88,13 +88,13 @@ impl MQTTService {
         Ok(MQTTService(Arc::new(MQTTServiceData {
             cluster: ClusterState::new(location.clone()),
             client: Arc::new(Mutex::new(None)),
-            cluster_data,
             location,
             discovery_topic,
             nodes_topic,
             availability_topic,
             leader_topic,
             mqtt_options,
+            plugin_manager,
         })))
     }
 
@@ -131,19 +131,14 @@ impl MQTTService {
 
     async fn handle_node_update(&self, topic: &str, payload: String) -> Result<()> {
         let suffix = topic.trim_start_matches(&self.nodes_topic);
-        let suffix_parts: Vec<&str> = suffix.split('/').collect();
-        if suffix_parts.len() == 3 {
-            let (node, uniq_id, typ) = (suffix_parts[0], suffix_parts[1], suffix_parts[2]);
-            let node_prefix = format!("{}_", clean_name(node));
-            let dev_id = uniq_id.trim_start_matches(&node_prefix);
-            match typ {
-                "stat" => self.cluster_data.update_stat(node, dev_id, payload).await,
-                "attr" => {
-                    self.cluster_data
-                        .update_attr(node, dev_id, serde_json::from_str(&payload)?)
-                        .await
-                }
-                _ => (),
+        let typ = suffix.split('/').last();
+        if Some("attr") == typ {
+            let dat: Document = serde_json::from_str(&payload)?;
+            let plugin = dat["corvus_plugin"].clone();
+            if plugin.is_string() {
+                self.plugin_manager
+                    .process_update(plugin.as_string().as_ref().unwrap(), dat)
+                    .await?
             }
         }
         Ok(())
@@ -237,8 +232,9 @@ impl MQTTService {
             .await?;
 
             let mut attr = d.attr.clone();
-            attr["set_by_location"] = self.location.clone().into();
             attr["update_timestamp"] = Local::now().to_rfc3339().into();
+            attr["corvus_location"] = self.location.clone().into();
+            attr["corvus_plugin"] = device.plugin().into();
             self.publish(
                 &device.attr_topic(),
                 &serde_json::to_string(&attr)?,

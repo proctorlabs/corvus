@@ -11,8 +11,8 @@ pub struct DeviceRegistry(DeviceRegistryInner);
 
 #[derive(Clone, Debug)]
 pub struct DeviceRegistryInner {
-    devices_names: Arc<RwLock<HashMap<String, Arc<Device>>>>,
-    devices_ids:   Arc<RwLock<HashMap<String, Arc<Device>>>>,
+    devices_names: Arc<RwLock<HashMap<String, Device>>>,
+    devices_ids:   Arc<RwLock<HashMap<String, Device>>>,
     mqtt:          MQTTService,
     location:      String,
     base_topic:    String,
@@ -41,30 +41,29 @@ impl DeviceRegistry {
         })
     }
 
-    pub fn new_device(&self, display_name: String, typ: DeviceType) -> DeviceData {
+    pub fn new_device(&self, display_name: String, typ: DeviceType, plugin: String) -> DeviceData {
         DeviceData::new(
             display_name,
             typ,
             self.location.to_string(),
             self.base_topic.to_string(),
+            plugin,
         )
     }
 
-    pub async fn get_by_name(&self, key: &str) -> Option<Arc<Device>> {
+    pub async fn get_by_name(&self, key: &str) -> Option<Device> {
         let reg = self.devices_names.read().await;
         let d = reg.get(key).cloned();
         d
     }
 
-    pub async fn get_by_id(&self, key: &str) -> Option<Arc<Device>> {
+    pub async fn get_by_id(&self, key: &str) -> Option<Device> {
         let reg = self.devices_names.read().await;
         let d = reg.get(key).cloned();
         d
     }
 
-    pub async fn register(&self, device: Device) -> Result<()> {
-        let device = Arc::new(device);
-
+    pub async fn register(&self, device: Device) -> Result<Device> {
         let mut reg = self.devices_names.write().await;
         reg.insert(device.display_name().to_string(), device.clone());
         drop(reg);
@@ -75,10 +74,10 @@ impl DeviceRegistry {
         if existing.is_none() {
             self.publish_device(&device).await?;
         }
-        Ok(())
+        Ok(device)
     }
 
-    pub async fn list_devices(&self) -> Result<Vec<Arc<Device>>> {
+    pub async fn list_devices(&self) -> Result<Vec<Device>> {
         let reg = self.devices_names.read().await;
         Ok(reg.values().cloned().collect())
     }

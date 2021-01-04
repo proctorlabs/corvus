@@ -46,13 +46,14 @@ impl Plugin for DHTPlugin {
         Ok(())
     }
 
-    async fn heartbeat(&self, _: String) -> Result<()> {
+    async fn heartbeat(&self, name: String) -> Result<()> {
         self.registry
             .register(
                 self.registry
                     .new_device(
                         self.temperature_device.to_string(),
                         DeviceType::Sensor(SensorDeviceClass::Temperature),
+                        name.to_string(),
                     )
                     .with_unit_of_measurement("°C".into())
                     .build(),
@@ -64,6 +65,7 @@ impl Plugin for DHTPlugin {
                     .new_device(
                         self.humidity_device.to_string(),
                         DeviceType::Sensor(SensorDeviceClass::Humidity),
+                        name,
                     )
                     .with_unit_of_measurement("%".into())
                     .build(),

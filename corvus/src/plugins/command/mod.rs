@@ -46,10 +46,15 @@ impl Plugin for CommandPlugin {
         self.registry
             .register(
                 self.registry
-                    .new_device(name, DeviceType::Sensor(SensorDeviceClass::None))
+                    .new_device(
+                        name.to_string(),
+                        DeviceType::Sensor(SensorDeviceClass::None),
+                        name,
+                    )
                     .build(),
             )
-            .await
+            .await?;
+        Ok(())
     }
 
     async fn run(&self, name: String) -> Result<()> {
